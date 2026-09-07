@@ -69,14 +69,7 @@ export const RegisterView: React.FC = () => {
       return;
     }
 
-    const result = await register({
-      name: name.trim(),
-      email: email.trim(),
-      course,
-      semester,
-      password
-    });
-
+const result: any = await register(email.trim(), password);
     if (!result.success) {
       setErrorMessage(result.error || 'Não foi possível concluir o cadastro.');
     } else {
