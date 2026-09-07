@@ -140,7 +140,7 @@ export const Sidebar: React.FC = () => {
             {(currentUser?.name || studentName)
               .split(' ')
               .filter(Boolean)
-              .map(n => n[0])
+              .map((n: any) => n[0])
               .slice(0, 2)
               .join('')
               .toUpperCase() || 'AL'}

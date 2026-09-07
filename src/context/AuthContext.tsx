@@ -2,15 +2,22 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+export type AppUser = User & {
+  name?: string;
+  course?: string;
+  semester?: string;
+};
+
 interface AuthContextType {
   user: User | null;
-  currentUser: User | null; // Adicionado para compatibilidade com o resto do app
+  currentUser: AppUser | null;
   session: Session | null;
   loading: boolean;
-  isLoading: boolean; // Adicionado para compatibilidade
-  isAuthenticated: boolean; // Adicionado para compatibilidade
+  isLoading: boolean;
+  isAuthenticated: boolean;
   signOut: () => Promise<void>;
-  logout: () => Promise<void>; // Adicionado para compatibilidade
+  logout: () => Promise<void>;
+  register: (email: string, password: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,7 +34,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
-    // Adicionamos as tipagens AuthChangeEvent e Session | null aqui para o TypeScript não reclamar
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -41,16 +47,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
-  // Mapeamos os valores antigos para os nomes que o seu app já espera
+  const register = async (email: string, password: string) => {
+    return supabase.auth.signUp({ email, password });
+  };
+
+  const appUser = user ? { 
+    ...user, 
+    name: 'Usuário', 
+    course: 'Curso', 
+    semester: '1º Semestre' 
+  } as AppUser : null;
+
   const value = {
     user,
-    currentUser: user,
+    currentUser: appUser,
     session,
     loading,
     isLoading: loading,
     isAuthenticated: !!user,
     signOut,
     logout: signOut,
+    register,
   };
 
   return (
