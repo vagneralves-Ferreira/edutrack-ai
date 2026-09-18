@@ -1,0 +1,3 @@
+﻿- [x] 1. Inicializar as especificacoes de estrutura no OpenSpec para a base de dados.
+- [x] 2. Gerar o ficheiro de definicao de esquema correspondente para ser sincronizado com o backend.
+- [x] 3. Validar a tipagem dos dados e as regras de obrigatoriedade.
