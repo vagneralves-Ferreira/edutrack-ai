@@ -60,6 +60,25 @@ export const LoginView: React.FC = () => {
       navigate(from, { replace: true });
     }
   };
+
+const handleResetPassword = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Por favor, preencha o e-mail institucional para recuperar a palavra-passe.');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setLoading(false);
+    
+    if (error) {
+      setErrorMessage(error.message);
+    } else {
+      alert('Se o e-mail estiver registado, receberá um link para redefinir a palavra-passe.');
+    }
+  };
+
 return (
   <div className="min-h-screen bg-[#0a0c10] text-slate-100 flex items-center justify-center p-4">
     <div className="w-full max-w-md">
@@ -117,8 +136,7 @@ return (
             />
             Lembrar de mim
           </label>
-          <a href="#" className="text-amber-400 hover:text-amber-300">Esqueci a senha</a>
-        </div>
+<button type="button" onClick={handleResetPassword} className="text-amber-400 hover:text-amber-300">Esqueci a senha</button>        </div>
 
         {errorMessage && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-sm text-red-400">

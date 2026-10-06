@@ -65,10 +65,17 @@ export const SubjectsView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left column: Subject List Selector (4 cols on lg) */}
         <div className="lg:col-span-4 space-y-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1">
-            Selecione a Disciplina
-          </p>
-          {subjects.map((subj) => {
+<div className="flex items-center justify-between px-1">
+  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+    Selecione a Disciplina
+  </p>
+  <button
+    onClick={() => alert('Funcionalidade de adicionar nova disciplina acionada!')}
+    className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+  >
+    + Nova Disciplina
+  </button>
+</div>          {subjects.map((subj) => {
             const isSelected = subj.id === activeSubjectId;
             return (
               <div
