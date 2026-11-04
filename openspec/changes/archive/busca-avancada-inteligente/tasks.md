@@ -1,0 +1,5 @@
+- [x] Create hybrid search Python module scripts/search_subjects.py
+- [x] Implement name, code and overdue filter logic
+- [x] Format response with JSON structure and count
+- [x] Test CLI execution with mock parameters
+- [x] Archive OpenSpec proposal busca-avancada-inteligente
