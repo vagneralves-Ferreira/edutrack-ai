@@ -1,0 +1,33 @@
+{
+  "title": "Relatorio de Desempenho Academico - EduTrack AI",
+  "student": "Vagner Alves",
+  "metrics": {
+    "total_subjects": 3,
+    "completed_tasks": 11,
+    "total_tasks": 14,
+    "overall_progress_percentage": 78.57
+  },
+  "subjects_detail": [
+    {
+      "code": "IMP-SQL101",
+      "name": "SQL Fundamentals",
+      "completed": 5,
+      "total": 5,
+      "progress": 100.0
+    },
+    {
+      "code": "IMP-ENG201",
+      "name": "Software Engineering",
+      "completed": 4,
+      "total": 5,
+      "progress": 80.0
+    },
+    {
+      "code": "IMP-ALG102",
+      "name": "Programming & Algorithms",
+      "completed": 2,
+      "total": 4,
+      "progress": 50.0
+    }
+  ]
+}
