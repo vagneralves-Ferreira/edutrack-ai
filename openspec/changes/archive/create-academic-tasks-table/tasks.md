@@ -1,0 +1,4 @@
+- [x] Create academic_tasks table schema in Supabase
+- [x] Configure foreign key constraint to subjects table
+- [x] Enable RLS policies per user_id
+- [x] Define TypeScript interface mapping in types/

@@ -1,0 +1,4 @@
+- [x] Create Python script scripts/calculate_progress.py
+- [x] Handle division by zero error edge cases
+- [x] Output JSON formatted result
+- [x] Validate CLI invocation and test execution

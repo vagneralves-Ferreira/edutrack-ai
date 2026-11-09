@@ -1,0 +1,4 @@
+- [x] Create Python report generator scripts/generate_pdf_report.py
+- [x] Configure academic metric aggregation logic
+- [x] Output report document payload into docs/reports/
+- [x] Archive OpenSpec proposal geracao-relatorio-pdf

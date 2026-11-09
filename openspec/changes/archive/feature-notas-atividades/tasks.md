@@ -1,0 +1,3 @@
+- [x] Create activity_grades table schema definition
+- [x] Implement grade calculation logic interface in TypeScript
+- [x] Configure RLS security policy for grade entries

@@ -1,0 +1,5 @@
+- [x] Configure SELECT policy for subjects
+- [x] Configure INSERT policy for subjects
+- [x] Configure UPDATE policy for subjects
+- [x] Configure DELETE policy for subjects
+- [x] Archive OpenSpec proposal api-crud-disciplinas

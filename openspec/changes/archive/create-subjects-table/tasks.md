@@ -1,0 +1,3 @@
+- [x] Create subjects schema definition in Supabase
+- [x] Define TypeScript interface for Subject entity
+- [x] Validate RLS security policies per user_id
