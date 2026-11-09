@@ -278,6 +278,61 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .select('*')
           .order('created_at', { ascending: false });
 
+        // Reconciliação de disciplinas se existir usuário autenticado
+        const { data: authData } = await supabase.auth.getUser();
+        const userId = authData?.user?.id;
+
+        if (userId) {
+          await supabase.from('profiles').upsert(
+            {
+              id: userId,
+              nome: studentName,
+              curso: 'Ciência da Computação',
+              semestre_atual: '2026.2',
+            },
+            { onConflict: 'id' }
+          );
+
+          const mappedDbSubjects: Subject[] = (dbSubjects || []).map(normalizeSubject);
+
+          const uniqueDbSubjects: Subject[] = [];
+          for (const dbSub of mappedDbSubjects) {
+            const alreadyAdded = uniqueDbSubjects.some(
+              (s) =>
+                s.name.toLowerCase() === dbSub.name.toLowerCase() ||
+                s.code.toLowerCase() === dbSub.code.toLowerCase()
+            );
+            if (!alreadyAdded) {
+              uniqueDbSubjects.push(dbSub);
+            }
+          }
+
+          const missingLocalSubjects = subjects.filter(
+            (localSub) =>
+              !uniqueDbSubjects.some(
+                (dbSub) =>
+                  dbSub.name.toLowerCase() === localSub.name.toLowerCase() ||
+                  dbSub.code.toLowerCase() === localSub.code.toLowerCase()
+              )
+          );
+
+          if (missingLocalSubjects.length > 0) {
+            await supabase.from('subjects').insert(
+              missingLocalSubjects.map((sub) => ({
+                user_id: userId,
+                codigo: sub.code,
+                nome: sub.name,
+                professor: sub.professors?.[0] || 'Prof. Responsável',
+                carga_horaria_total: sub.totalHours || 80,
+              }))
+            );
+          }
+
+          const reconciledSubjects: Subject[] = [...uniqueDbSubjects, ...missingLocalSubjects];
+          setSubjects(reconciledSubjects);
+          persistSubjectsToStorage(reconciledSubjects);
+        }
+
         if (tasksError) {
           console.warn('Aviso ao consultar tasks no Supabase:', tasksError.message);
           return;
