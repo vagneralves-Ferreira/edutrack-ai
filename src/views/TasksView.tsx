@@ -16,6 +16,7 @@ import {
   BookMarked
 } from 'lucide-react';
 import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } from '../utils/helpers';
+import { AiDica } from '../components/AiDica';
 
 export const TasksView: React.FC = () => {
   const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, importClassroomTasks } = usePlanner();
@@ -168,6 +169,9 @@ export const TasksView: React.FC = () => {
           <span className="text-[11px] font-mono text-emerald-400/90">Google Workspace • Impacta</span>
         </div>
       )}
+
+      {/* IA Dica */}
+      <AiDica tela="Tarefas & Prazos" contexto={{ total: tasks.length }} />
 
       {/* Filters Bar */}
       <div className="p-5 rounded-2xl bg-slate-800/50 shadow-md flex flex-wrap items-center justify-between gap-4">

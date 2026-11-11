@@ -5,6 +5,7 @@ import { QuickStats } from '../components/dashboard/QuickStats';
 import { SubjectProgressCard } from '../components/dashboard/SubjectProgressCard';
 import { TimeDistributionChart } from '../components/dashboard/TimeDistributionChart';
 import { UpcomingTasksSection } from '../components/dashboard/UpcomingTasksSection';
+import { AiDica } from '../components/AiDica';
 import { BookOpen, ArrowRight } from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
@@ -14,6 +15,9 @@ export const DashboardView: React.FC = () => {
     <div className="space-y-10 animate-in fade-in duration-300">
       {/* 1. Greeting Banner integrated directly into page background */}
       <GreetingBanner />
+
+      {/* IA Dica */}
+      <AiDica tela="Visão Geral" />
 
       {/* 2. Key Academic Semester Stats */}
       <QuickStats subjects={subjects} tasks={tasks} />

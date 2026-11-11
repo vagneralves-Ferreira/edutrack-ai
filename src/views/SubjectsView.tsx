@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Plus, X } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
+import { AiDica } from '../components/AiDica';
 
 export const SubjectsView: React.FC = () => {
   const { subjects, selectedSubject, setSelectedSubject, addSubject } = usePlanner();
@@ -49,6 +50,8 @@ export const SubjectsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AiDica tela="Disciplinas" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="space-y-4">

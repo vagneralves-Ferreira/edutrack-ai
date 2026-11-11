@@ -32,3 +32,5 @@ edutrack-ai/
 *.njsproj
 *.sln
 *.sw?
+
+supabase/.temp/
