@@ -113,28 +113,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
+
+    // Verifica primeiro se o usuário redefiniu a senha pelo fluxo de recuperação
+    const savedResetPassword = localStorage.getItem(`edutrack_pwd_${cleanEmail}`);
+    if (savedResetPassword) {
+      if (savedResetPassword === password) {
+        const recoveredUser = {
+          id: `user-${cleanEmail}`,
+          aud: 'authenticated',
+          role: 'authenticated',
+          email: cleanEmail,
+          app_metadata: {},
+          user_metadata: { name: cleanEmail.split('@')[0] },
+          created_at: new Date().toISOString(),
+        } as User;
+
+        localStorage.setItem('edutrack_active_user', JSON.stringify(recoveredUser));
+        setUser(recoveredUser);
+        return { success: true };
+      }
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (!error && data?.user) {
       localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
       localStorage.setItem('edutrack_active_user', JSON.stringify(data.user));
-      return { success: true };
-    }
-
-    // Verifica se o usuário acabou de redefinir a senha pelo fluxo de recuperação
-    const savedResetPassword = localStorage.getItem(`edutrack_pwd_${cleanEmail}`);
-    if (savedResetPassword && savedResetPassword === password) {
-      const recoveredUser = {
-        id: `user-${cleanEmail}`,
-        aud: 'authenticated',
-        role: 'authenticated',
-        email: cleanEmail,
-        app_metadata: {},
-        user_metadata: { name: cleanEmail.split('@')[0] },
-        created_at: new Date().toISOString(),
-      } as User;
-
-      localStorage.setItem('edutrack_active_user', JSON.stringify(recoveredUser));
-      setUser(recoveredUser);
+      setUser(data.user);
+      if (data.session) setSession(data.session);
       return { success: true };
     }
 

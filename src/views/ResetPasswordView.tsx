@@ -83,21 +83,24 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
       // Persiste a nova senha escolhida para garantir o acesso imediato na tela de login
       localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
       localStorage.setItem('edutrack_recovery_email', targetEmail);
+      localStorage.removeItem('edutrack_active_user');
 
       setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);
 
       setTimeout(() => {
         exitToLogin();
-      }, 1000);
+      }, 900);
     } catch {
       localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
+      localStorage.setItem('edutrack_recovery_email', targetEmail);
+      localStorage.removeItem('edutrack_active_user');
       setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);
 
       setTimeout(() => {
         exitToLogin();
-      }, 1000);
+      }, 900);
     }
   };
 
