@@ -29,19 +29,36 @@ O usuario esta na tela "${tela}" do app. Contexto: ${JSON.stringify(contexto ?? 
 Gere UMA dica curta (maximo 2 frases), pratica e especifica para esse contexto, em portugues do Brasil.
 Responda apenas com o texto da dica, sem titulos nem markdown.`;
 
-    const geminiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") ?? "" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 200 },
-        }),
-      }
-    );
+    const chave = Deno.env.get("GEMINI_API_KEY") ?? "";
+    console.log("chave presente?", Boolean(chave), "tamanho:", chave?.length ?? 0);
+
+    const callGemini = (model: string) =>
+      fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": chave },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 200 },
+          }),
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+
+    let geminiRes = await callGemini("gemini-3.8-flash");
+
+    if (geminiRes.status === 503 || geminiRes.status === 429) {
+      geminiRes = await callGemini("gemini-3.8-flash");
+    }
+
+    if (geminiRes.status === 503 || geminiRes.status === 429) {
+      geminiRes = await callGemini("gemini-flash-latest");
+    }
 
     if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      console.error("Gemini status:", geminiRes.status, "corpo:", errText.slice(0, 500));
       return new Response(JSON.stringify({ error: `Gemini respondeu ${geminiRes.status}` }), {
         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
       });
@@ -54,8 +71,9 @@ Responda apenas com o texto da dica, sem titulos nem markdown.`;
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    console.error("Falha:", err);
+    return new Response(JSON.stringify({ error: "Erro temporario" }), {
+      status: 502, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });

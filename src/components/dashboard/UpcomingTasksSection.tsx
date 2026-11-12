@@ -53,28 +53,26 @@ export const UpcomingTasksSection: React.FC = () => {
   const criticalMvpCount = tasks.filter(t => (t.isCriticalMvp || t.subjectId === 'innovation-lab') && t.status !== 'completed').length;
 
   return (
-    <div className="rounded-2xl bg-slate-800/50 p-7 shadow-lg h-full flex flex-col justify-between">
+    <div className="bento-card rounded-2xl p-6 h-full flex flex-col justify-between">
       <div>
         {/* Header with Title and Filter Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-                <Flame className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
-                  Tarefas Próximas & Prazos Críticos
-                  {criticalMvpCount > 0 && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 animate-pulse">
-                      {criticalMvpCount} MVP (Innovation Lab)
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Acompanhe entregas com destaque especial para as Avaliações Parciais e o MVP de Innovation Lab
-                </p>
-              </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <Flame className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
+                Tarefas Próximas & Prazos Críticos
+                {criticalMvpCount > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    {criticalMvpCount} MVP
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-slate-400">
+                Prioridades acadêmicas, avaliações parciais e entregas do semestre
+              </p>
             </div>
           </div>
 
@@ -83,25 +81,25 @@ export const UpcomingTasksSection: React.FC = () => {
             <button
               onClick={handleSyncClassroom}
               disabled={isSyncingClassroom}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 text-emerald-300 text-xs font-semibold transition-all cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-xs font-semibold transition-all cursor-pointer"
               title="Sincronizar com Google Classroom"
             >
               <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Sincronizar Classroom</span>
+              <span className="hidden sm:inline">Classroom</span>
             </button>
 
-            <div className="flex p-1 rounded-xl bg-slate-900/60 text-xs">
+            <div className="flex p-1 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  filter === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                  filter === 'all' ? 'bg-white/[0.1] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Todas ({tasks.length})
               </button>
               <button
                 onClick={() => setFilter('mvp')}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
                   filter === 'mvp' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -109,8 +107,8 @@ export const UpcomingTasksSection: React.FC = () => {
               </button>
               <button
                 onClick={() => setFilter('pending')}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  filter === 'pending' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                  filter === 'pending' ? 'bg-white/[0.1] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Pendentes
@@ -119,7 +117,7 @@ export const UpcomingTasksSection: React.FC = () => {
 
             <button
               onClick={() => setIsNewTaskModalOpen(true)}
-              className="p-2 rounded-xl bg-slate-900/60 hover:bg-slate-800 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer shadow-sm"
+              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
               title="Nova Tarefa"
             >
               <Plus className="w-4 h-4" />
@@ -128,7 +126,7 @@ export const UpcomingTasksSection: React.FC = () => {
         </div>
 
         {/* Task List */}
-        <div className="mt-4 space-y-3.5">
+        <div className="mt-4 space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
           {sortedTasks.length === 0 ? (
             <div className="py-12 text-center">
               <CheckCircle2 className="w-10 h-10 text-emerald-400/50 mx-auto mb-2" />
@@ -145,7 +143,7 @@ export const UpcomingTasksSection: React.FC = () => {
                 return (
                   <div
                     key={task.id}
-                    className="relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-500/15 via-slate-800/80 to-slate-800/60 p-4.5 transition-all hover:bg-slate-800 shadow-md group"
+                    className="relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-500/12 via-white/[0.03] to-white/[0.02] border border-amber-500/25 p-4 transition-all hover:border-amber-500/40 group"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
@@ -154,48 +152,43 @@ export const UpcomingTasksSection: React.FC = () => {
                           className="mt-0.5 text-amber-400 hover:text-emerald-400 transition-colors shrink-0 cursor-pointer"
                           title="Marcar como Concluída"
                         >
-                          <Circle className="w-5 h-5" />
+                          <Circle className="w-4 h-4" />
                         </button>
 
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-slate-950 flex items-center gap-1 shadow-sm">
-                              <AlertTriangle className="w-3 h-3" />
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-slate-950 flex items-center gap-1">
+                              <AlertTriangle className="w-2.5 h-2.5" />
                               {task.subjectId === 'innovation-lab' ? 'AVALIAÇÃO PARCIAL MVP' : 'AVALIAÇÃO PARCIAL'}
                             </span>
-                            <span className="text-[11px] font-semibold text-sky-400 bg-sky-950/60 px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded">
                               {task.subjectName}
                             </span>
                             {task.importedFromClassroom && (
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
                                 <BookMarked className="w-2.5 h-2.5 text-emerald-400" />
-                                Importado do Classroom
-                              </span>
-                            )}
-                            {task.scoreWeight && (
-                              <span className="text-[10px] font-mono font-medium text-amber-300/90 bg-amber-950/40 px-2 py-0.5 rounded">
-                                {task.scoreWeight}
+                                Classroom
                               </span>
                             )}
                           </div>
 
-                          <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
                             {task.title}
                           </h4>
-                          <p className="text-xs text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
                             {task.description}
                           </p>
                         </div>
                       </div>
 
                       {/* Due Date & Urgency Pill */}
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-mono text-xs font-bold shadow-sm">
-                          <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300 font-mono text-[11px] font-bold">
+                          <Calendar className="w-3 h-3 text-amber-400" />
                           <span>{formatDateBR(task.dueDate)}</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-amber-400 font-mono">
-                          {label} {task.dueTime ? `às ${task.dueTime}` : ''}
+                        <span className="text-[10px] font-semibold text-amber-400/90 font-mono">
+                          {label}
                         </span>
                       </div>
                     </div>
@@ -207,10 +200,10 @@ export const UpcomingTasksSection: React.FC = () => {
               return (
                 <div
                   key={task.id}
-                  className={`rounded-xl p-4 transition-all flex items-center justify-between gap-3 shadow-md ${
+                  className={`rounded-xl p-3.5 border transition-all flex items-center justify-between gap-3 ${
                     isCompleted
-                      ? 'bg-slate-800/30 opacity-60'
-                      : 'bg-slate-800/60 hover:bg-slate-800/90'
+                      ? 'bg-white/[0.01] border-white/[0.04] opacity-55'
+                      : 'bg-white/[0.025] border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.12]'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -221,18 +214,18 @@ export const UpcomingTasksSection: React.FC = () => {
                       }`}
                       title={isCompleted ? 'Desmarcar' : 'Concluir Tarefa'}
                     >
-                      {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                      {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
                     </button>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-[10px] font-semibold text-sky-400 bg-sky-950/40 px-1.5 py-0.5 rounded">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className="text-[10px] font-semibold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded">
                           {task.subjectName}
                         </span>
                         {task.importedFromClassroom && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
                             <BookMarked className="w-2.5 h-2.5 text-emerald-400" />
-                            Importado do Classroom
+                            Classroom
                           </span>
                         )}
                         {(() => {
@@ -250,7 +243,7 @@ export const UpcomingTasksSection: React.FC = () => {
                           );
                         })()}
                       </div>
-                      <h4 className={`text-xs font-semibold truncate ${isCompleted ? 'line-through text-slate-400' : 'text-white'}`}>
+                      <h4 className={`text-xs font-semibold truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-100'}`}>
                         {task.title}
                       </h4>
                     </div>
@@ -274,16 +267,16 @@ export const UpcomingTasksSection: React.FC = () => {
       </div>
 
       {/* Footer navigation */}
-      <div className="mt-6 pt-3 flex items-center justify-between">
+      <div className="mt-5 pt-3 border-t border-white/[0.06] flex items-center justify-between">
         <span className="text-xs text-slate-400">
-          Mostrando {sortedTasks.length} de {tasks.length} itens no planner
+          Exibindo {sortedTasks.length} de {tasks.length} tarefas
         </span>
 
         <button
           onClick={() => setActiveTab('tarefas')}
-          className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer"
+          className="text-xs font-semibold text-sky-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
         >
-          <span>Gerenciar Todas no Kanban</span>
+          <span>Abrir quadro Kanban</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -291,13 +284,13 @@ export const UpcomingTasksSection: React.FC = () => {
       {/* High-Fidelity Google Classroom OAuth / Sync Modal */}
       {isSyncingClassroom && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 p-7 shadow-2xl text-center space-y-5">
+          <div className="w-full max-w-md rounded-2xl bento-card p-7 shadow-2xl text-center space-y-5">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shadow-inner">
               <RefreshCw className="w-7 h-7 animate-spin" />
             </div>
 
             <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-[11px] font-semibold text-slate-300">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-[11px] font-semibold text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-[#34A853]" />
                 <span>Google Classroom • OAuth 2.0</span>
               </div>
@@ -309,7 +302,7 @@ export const UpcomingTasksSection: React.FC = () => {
               </p>
             </div>
 
-            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
               <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#4285F4] via-[#34A853] to-[#FBBC05] animate-pulse" />
             </div>
           </div>

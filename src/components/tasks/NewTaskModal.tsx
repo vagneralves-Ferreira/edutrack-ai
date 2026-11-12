@@ -80,11 +80,11 @@ export const NewTaskModal: React.FC = () => {
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className="relative w-full max-w-lg rounded-2xl bg-slate-900 shadow-2xl p-7 text-slate-100">
+      <div className="relative w-full max-w-lg rounded-2xl bento-card shadow-2xl p-7 text-slate-100">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4">
+        <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
+            <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-400">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
@@ -100,14 +100,14 @@ export const NewTaskModal: React.FC = () => {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Título da Atividade *
@@ -119,7 +119,7 @@ export const NewTaskModal: React.FC = () => {
               placeholder="Ex: Exercício Prático: Junções e Agrupamentos em SQL"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
             />
           </div>
 
@@ -131,10 +131,10 @@ export const NewTaskModal: React.FC = () => {
               <select
                 value={subjectId}
                 onChange={(e) => setSubjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer transition-all"
               >
                 {subjects.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-slate-800 text-white">
+                  <option key={s.id} value={s.id} className="bg-[#0e1320] text-white">
                     {s.name}
                   </option>
                 ))}
@@ -157,15 +157,15 @@ export const NewTaskModal: React.FC = () => {
                     setIsCriticalMvp(false);
                   }
                 }}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer transition-all"
               >
-                <option value="exercicio" className="bg-slate-800">Exercício Prático</option>
-                <option value="lista" className="bg-slate-800">Lista de Exercícios</option>
-                <option value="laboratorio" className="bg-slate-800">Laboratório</option>
-                <option value="leitura" className="bg-slate-800">Leitura Complementar</option>
-                <option value="projeto" className="bg-slate-800">Projeto Integrador</option>
-                <option value="avaliacao" className="bg-slate-800">Avaliação Parcial</option>
-                <option value="avaliacao_mvp" className="bg-slate-800">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
+                <option value="exercicio">Exercício Prático</option>
+                <option value="lista">Lista de Exercícios</option>
+                <option value="laboratorio">Laboratório</option>
+                <option value="leitura">Leitura Complementar</option>
+                <option value="projeto">Projeto Integrador</option>
+                <option value="avaliacao">Avaliação Parcial</option>
+                <option value="avaliacao_mvp">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
               </select>
             </div>
           </div>
@@ -178,12 +178,12 @@ export const NewTaskModal: React.FC = () => {
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer transition-all"
               >
-                <option value="critica" className="bg-slate-800">🔥 Crítica (Urgente)</option>
-                <option value="alta" className="bg-slate-800">⚡ Alta</option>
-                <option value="media" className="bg-slate-800">Média</option>
-                <option value="baixa" className="bg-slate-800">Baixa</option>
+                <option value="critica">🔥 Crítica (Urgente)</option>
+                <option value="alta">⚡ Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
               </select>
             </div>
 
@@ -196,19 +196,19 @@ export const NewTaskModal: React.FC = () => {
                 required
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 font-mono transition-all"
               />
             </div>
           </div>
 
           {/* MVP Checkbox */}
-          <div className="p-4 rounded-xl bg-amber-500/10 shadow-sm">
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={isCriticalMvp}
                 onChange={(e) => handleMvpToggle(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800/70"
+                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-white/[0.05]"
               />
               <div className="text-xs">
                 <span className="font-bold text-amber-300 flex items-center gap-1.5">
@@ -222,7 +222,7 @@ export const NewTaskModal: React.FC = () => {
             </label>
 
             {isCriticalMvp && (
-              <div className="mt-3 pt-3">
+              <div className="mt-3 pt-3 border-t border-amber-500/20">
                 <label className="block text-[11px] font-semibold text-amber-300/90 mb-1">
                   Peso na Média / Nota
                 </label>
@@ -231,7 +231,7 @@ export const NewTaskModal: React.FC = () => {
                   value={scoreWeight}
                   onChange={(e) => setScoreWeight(e.target.value)}
                   placeholder="Ex: Peso 40% na Média"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 transition-all"
                 />
               </div>
             )}
@@ -246,16 +246,16 @@ export const NewTaskModal: React.FC = () => {
               placeholder="Critérios, instruções do Teams, páginas do livro ou requisitos..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
             />
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-3 flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-white/[0.06] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
             >
               Cancelar
             </button>

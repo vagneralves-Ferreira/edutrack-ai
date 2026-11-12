@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePlanner } from '../context/PlannerContext';
 import { useTimer } from '../context/TimerContext';
-import { Timer as TimerIcon, Play, Pause, RotateCcw, Check, Sparkles, Activity } from 'lucide-react';
+import { Timer as TimerIcon, Play, Pause, RotateCcw, Check, Activity, Sparkles } from 'lucide-react';
 
 export const TimerView: React.FC = () => {
   const { subjects, setActiveTab } = usePlanner();
@@ -25,11 +25,11 @@ export const TimerView: React.FC = () => {
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header */}
       <div className="text-center">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold mb-3">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold mb-3">
           <TimerIcon className="w-3.5 h-3.5" />
           <span>Cronômetro de Foco & Estudo Acadêmico</span>
           {isActive && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-medium pl-1 border-l border-amber-500/30">
+            <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-medium pl-2 border-l border-amber-500/30">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Ativo em 2º plano
             </span>
@@ -44,12 +44,13 @@ export const TimerView: React.FC = () => {
       </div>
 
       {/* Main Timer Container */}
-      <div className="rounded-3xl bg-[#0f1422] border border-[#1e273d] p-8 shadow-2xl text-center relative overflow-hidden">
+      <div className="bento-card rounded-3xl p-8 text-center relative overflow-hidden">
         {/* Glow ambient */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-80 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-80 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Top Progress Bar */}
-        <div className="w-full bg-[#141b2c] h-1.5 rounded-full mb-6 overflow-hidden">
+        <div className="w-full bg-white/[0.06] h-1.5 rounded-full mb-6 overflow-hidden">
           <div 
             className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-1000 ease-linear"
             style={{ width: `${progressPercentage}%` }}
@@ -70,24 +71,24 @@ export const TimerView: React.FC = () => {
             value={selectedSubjectId}
             onChange={(e) => setSelectedSubjectId(e.target.value)}
             disabled={isActive}
-            className={`w-full px-4 py-2.5 rounded-xl bg-[#141b2c] border border-[#232f4a] text-white text-xs font-medium focus:outline-none focus:border-amber-400 cursor-pointer ${
+            className={`w-full px-4 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs font-medium focus:outline-none focus:border-amber-400 cursor-pointer ${
               isActive ? 'opacity-80 cursor-not-allowed' : ''
             }`}
           >
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.professors[0]})
+                {s.name} ({s.professors?.[0] || 'Prof. Responsável'})
               </option>
             ))}
           </select>
         </div>
 
         {/* Mode Selector */}
-        <div className="inline-flex p-1 rounded-2xl bg-[#141b2c] border border-[#232f4a] text-xs font-semibold mb-8">
+        <div className="inline-flex p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-semibold mb-8">
           <button
             onClick={() => setMode('pomodoro')}
             className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              mode === 'pomodoro' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+              mode === 'pomodoro' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             Pomodoro (25 min)
@@ -95,7 +96,7 @@ export const TimerView: React.FC = () => {
           <button
             onClick={() => setMode('deepWork')}
             className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              mode === 'deepWork' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+              mode === 'deepWork' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             Foco Profundo (50 min)
@@ -103,7 +104,7 @@ export const TimerView: React.FC = () => {
           <button
             onClick={() => setMode('shortBreak')}
             className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              mode === 'shortBreak' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+              mode === 'shortBreak' ? 'bg-sky-500 text-slate-950 font-bold shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             Pausa Curta (5 min)
@@ -136,7 +137,7 @@ export const TimerView: React.FC = () => {
 
           <button
             onClick={resetTimer}
-            className="p-3.5 rounded-2xl bg-[#141b2c] hover:bg-[#1a2338] border border-[#232f4a] text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
             title="Reiniciar Cronômetro"
           >
             <RotateCcw className="w-5 h-5" />
@@ -152,16 +153,16 @@ export const TimerView: React.FC = () => {
       </div>
 
       {/* Footer Info Card */}
-      <div className="p-4 rounded-2xl bg-[#0f1422] border border-[#1e273d] flex items-center justify-between text-xs">
+      <div className="p-4 rounded-2xl bento-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <span className="text-slate-400">
           Precisa revisar conteúdos para as Avaliações Parciais e o MVP de 08/09 ou 10/09?
         </span>
         <button
           onClick={() => setActiveTab('ai-assistant')}
-          className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer flex items-center gap-1"
+          className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer flex items-center gap-1.5 shrink-0"
         >
-          <span>Abrir EduTrack AI Advisor</span>
-          <span>&rarr;</span>
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Abrir EduTrack AI Advisor &rarr;</span>
         </button>
       </div>
     </div>

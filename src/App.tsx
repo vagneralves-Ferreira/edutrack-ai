@@ -55,14 +55,14 @@ const MainLayout: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col md:flex-row antialiased">
+    <div className="min-h-screen bg-transparent text-slate-100 flex flex-col md:flex-row antialiased">
       {/* Desktop Sidebar */}
       <div className="hidden md:block shrink-0">
         <Sidebar />
       </div>
 
       {/* Mobile Top Bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0d111a] border-b border-[#1c2333] sticky top-0 z-40">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#070a12]/90 backdrop-blur-xl border-b border-white/[0.07] sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 font-bold">
             <Sparkles className="w-4 h-4" />
@@ -74,7 +74,7 @@ const MainLayout: React.FC = () => {
 
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg text-slate-400 hover:text-white bg-[#141926] border border-[#232d42]"
+          className="p-2 rounded-lg text-slate-400 hover:text-white bg-white/[0.04] border border-white/[0.08]"
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -82,7 +82,7 @@ const MainLayout: React.FC = () => {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-14 z-50 bg-[#0b0e17]/95 backdrop-blur-md p-5 flex flex-col justify-between">
+        <div className="md:hidden fixed inset-0 top-14 z-50 bg-[#070a12]/95 backdrop-blur-2xl p-5 flex flex-col justify-between">
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
               Navegação
@@ -100,7 +100,7 @@ const MainLayout: React.FC = () => {
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                      : 'text-slate-300 hover:bg-[#141b2c]'
+                      : 'text-slate-300 hover:bg-white/[0.04]'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -118,14 +118,14 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-[#121828] border border-[#1f283e] flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.07] flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-white">{currentUser?.name || studentName}</p>
                 <p className="text-[10px] text-slate-400">{currentUser?.email || 'Faculdade Impacta'}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
                 title="Sair da Conta (Logout)"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -133,7 +133,7 @@ const MainLayout: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#0b0e17] border border-[#1c2438] text-[11px] text-slate-500 text-center">
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-slate-500 text-center">
               Faculdade Impacta Tecnologia • 2026.2
             </div>
           </div>
@@ -144,7 +144,7 @@ const MainLayout: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         <Header />
 
-        <main className="flex-1 p-6 sm:p-8 lg:p-10 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-5 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto">
           <Routes>
             <Route path="/dashboard" element={<DashboardView />} />
             <Route path="/disciplinas" element={<SubjectsView />} />
@@ -173,6 +173,7 @@ export default function App() {
               {/* Public Authentication Screens */}
               <Route path="/login" element={<LoginView />} />
               <Route path="/cadastro" element={<RegisterView />} />
+              <Route path="/reset-password" element={<ResetPasswordView />} />
 
               {/* Protected Academic Modules */}
               <Route
@@ -190,4 +191,3 @@ export default function App() {
     </HashRouter>
   );
 }
-

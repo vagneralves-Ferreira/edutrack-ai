@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, 
-  Calendar, 
   Clock,
   Sparkles, 
   AlertCircle,
   Edit2,
   Check,
-  LogOut,
-  User as UserIcon
+  LogOut
 } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
@@ -71,18 +69,18 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-20 bg-[#0d111a]/80 backdrop-blur-md border-b border-[#1c2333] px-8 flex items-center justify-between sticky top-0 z-20 transition-all">
+    <header className="h-16 bg-[#06080f]/75 backdrop-blur-xl border-b border-white/[0.06] px-6 lg:px-8 flex items-center justify-between sticky top-0 z-20 transition-all">
       {/* Personalized Greeting & Subtitle */}
       <div className="flex items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
             {isEditingName ? (
-              <div className="flex items-center gap-1.5 bg-[#141926] px-2 py-1 rounded-lg border border-[#2b354d]">
+              <div className="flex items-center gap-1.5 bg-[#101522] px-2.5 py-1 rounded-lg border border-white/[0.12]">
                 <input
                   type="text"
                   value={tempName}
                   onChange={(e) => setTempName(e.target.value)}
-                  className="bg-transparent text-white font-bold text-lg outline-none w-48 font-sans"
+                  className="bg-transparent text-white font-bold text-base outline-none w-48 font-sans"
                   autoFocus
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
                 />
@@ -95,7 +93,7 @@ export const Header: React.FC = () => {
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <h1 className="text-xl font-bold tracking-tight text-white font-sans flex items-center gap-1.5">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-white font-sans flex items-center gap-1.5">
                   {greeting}
                   <span className="text-amber-400">⚡</span>
                 </h1>
@@ -109,23 +107,23 @@ export const Header: React.FC = () => {
               </div>
             )}
           </div>
-          <p className="text-xs text-slate-400 font-medium tracking-wide flex items-center gap-2 mt-0.5">
-            <span className="text-sky-400 font-semibold uppercase tracking-wider text-[10px] px-1.5 py-0.5 bg-sky-950/60 rounded border border-sky-800/40">
+          <p className="text-[11px] text-slate-400 font-medium tracking-wide flex items-center gap-2">
+            <span className="text-sky-400 font-semibold uppercase tracking-wider text-[9px] px-1.5 py-0.2 bg-sky-500/10 rounded border border-sky-500/20">
               planner acadêmico
             </span>
-            <span>•</span>
-            <span className="text-slate-400">Faculdade Impacta Tecnologia</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400 hidden sm:inline">Faculdade Impacta Tecnologia</span>
           </p>
         </div>
       </div>
 
       {/* Right controls: Date badge, Notification center, AI Trigger */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
 
         {/* Real-time Dynamic Clock */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#141926] border border-[#222b3d] text-xs font-medium text-slate-300 shadow-sm">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-xs font-medium text-slate-300">
           <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span className="font-sans font-medium tracking-tight">
+          <span className="font-sans font-medium tracking-tight text-[11px]">
             {currentDateTime}
           </span>
         </div>
@@ -134,23 +132,23 @@ export const Header: React.FC = () => {
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2.5 rounded-xl bg-[#141926] hover:bg-[#1a2233] border border-[#222b3d] text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="relative p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] text-slate-300 hover:text-white transition-colors cursor-pointer"
             title="Notificações e Avisos"
           >
             <Bell className="w-4 h-4" />
             {criticalTasks.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0d111a]" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#06080f]" />
             )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl bg-[#111624] border border-[#252f47] shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-between pb-3 border-b border-[#20293d]">
+            <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#0d1220]/95 backdrop-blur-2xl border border-white/[0.1] shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider">Avisos Acadêmicos</h4>
-                <span className="text-[10px] text-slate-400">{criticalTasks.length} críticos</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold">{criticalTasks.length} críticos</span>
               </div>
-              <div className="py-2 space-y-2 max-h-64 overflow-y-auto">
-                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
+              <div className="py-2.5 space-y-2 max-h-64 overflow-y-auto">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs">
                   <div className="flex items-center gap-1.5 text-amber-300 font-semibold mb-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>08/09: Avaliações Parciais</span>
@@ -159,7 +157,7 @@ export const Header: React.FC = () => {
                     Software Engineering (Prof. Fábio Nogueira) e Avaliação Parcial MVP de Innovation Lab.
                   </p>
                 </div>
-                <div className="p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-xs">
+                <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/25 text-xs">
                   <div className="flex items-center gap-1.5 text-sky-300 font-semibold mb-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>10/09: Prova & Modelo 3FN</span>
@@ -171,7 +169,7 @@ export const Header: React.FC = () => {
               </div>
               <button
                 onClick={() => { setShowNotifications(false); setActiveTab('tarefas'); }}
-                className="w-full mt-2 py-1.5 rounded-lg bg-[#182033] hover:bg-[#202b44] text-xs font-semibold text-slate-300 text-center transition-colors block cursor-pointer"
+                className="w-full mt-2 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] text-xs font-semibold text-slate-200 text-center transition-colors block cursor-pointer"
               >
                 Abrir Central de Tarefas
               </button>
@@ -182,15 +180,15 @@ export const Header: React.FC = () => {
         {/* AI Quick Assistant Trigger */}
         <button
           onClick={() => setActiveTab('ai-assistant')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-900/60 to-purple-900/60 hover:from-indigo-800/80 hover:to-purple-800/80 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition-all shadow-sm shadow-indigo-500/10 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/15 to-purple-500/15 hover:from-indigo-500/25 hover:to-purple-500/25 border border-indigo-500/30 text-indigo-200 text-xs font-semibold transition-all cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
           <span className="hidden sm:inline">IA Dicas</span>
         </button>
 
         {/* User Profile & Logout Button */}
-        <div className="flex items-center gap-2 pl-2 border-l border-[#222b3d]">
-          <div className="hidden lg:flex flex-col text-right">
+        <div className="flex items-center gap-2.5 pl-2.5 border-l border-white/[0.07]">
+          <div className="hidden xl:flex flex-col text-right">
             <span className="text-xs font-bold text-white leading-none">
               {currentUser?.name || studentName}
             </span>
@@ -201,7 +199,7 @@ export const Header: React.FC = () => {
 
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 hover:border-red-500/40 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 hover:border-rose-500/35 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
             title="Sair da Conta (Logout)"
           >
             <LogOut className="w-3.5 h-3.5" />
