@@ -30,6 +30,23 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('edutrack_theme', theme);
   }, [theme]);
 
+  // Global mouse-tracking spotlight coordinates for all .bento-card and .bento-card-interactive elements
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      const cards = document.querySelectorAll<HTMLElement>('.bento-card, .bento-card-interactive');
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        card.style.setProperty('--mouse-x', `${x}px`);
+        card.style.setProperty('--mouse-y', `${y}px`);
+      });
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
