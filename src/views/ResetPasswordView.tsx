@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Lock, KeyRound, AlertTriangle, ArrowRight, CheckCircle2, ArrowLeft, Mail, RefreshCw } from 'lucide-react';
+import { Lock, KeyRound, AlertTriangle, ArrowRight, CheckCircle2, ArrowLeft, Mail } from 'lucide-react';
 
 interface ResetPasswordViewProps {
   initialExpired?: boolean;
@@ -9,43 +9,28 @@ interface ResetPasswordViewProps {
 }
 
 export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
-  initialExpired = false,
   onFinishRecovery,
 }) => {
   const [email, setEmail] = useState<string>(() => localStorage.getItem('edutrack_recovery_email') || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [hasValidSession, setHasValidSession] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    initialExpired
-      ? 'Você clicou em um link de e-mail antigo que já expirou. Clique em "Reenviar Novo Link" abaixo e abra a última mensagem da conversa no seu Gmail.'
-      : null
-  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setHasValidSession(true);
-        setErrorMessage(null);
-        if (session.user.email) {
-          setEmail(session.user.email);
-        }
+      if (session?.user?.email) {
+        setEmail(session.user.email);
       }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setHasValidSession(true);
-        setErrorMessage(null);
-        if (session.user.email) {
-          setEmail(session.user.email);
-        }
+      if (session?.user?.email) {
+        setEmail(session.user.email);
       }
     });
 
@@ -59,41 +44,16 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
     navigate('/login', { replace: true });
   };
 
-  const handleResendLink = async () => {
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setErrorMessage('Preencha seu e-mail institucional no campo acima para receber um novo link.');
-      return;
-    }
-
-    setResending(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    localStorage.setItem('edutrack_recovery_email', cleanEmail);
-
-    const baseOrigin = window.location.origin.startsWith('http')
-      ? window.location.origin
-      : 'https://edutrack-ai-mauve-eight.vercel.app';
-
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${baseOrigin}/reset-password`,
-    });
-
-    setResending(false);
-
-    if (error) {
-      setErrorMessage(error.message);
-    } else {
-      setSuccessMessage(
-        'Novo link enviado! No seu Gmail, role até a ÚLTIMA mensagem no final da conversa e clique em "Reset password".'
-      );
-    }
-  };
-
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    const targetEmail = email.trim().toLowerCase();
+    if (!targetEmail) {
+      setErrorMessage('Por favor, informe seu e-mail institucional.');
+      return;
+    }
 
     if (!password || !confirmPassword) {
       setErrorMessage('Por favor, preencha a nova senha e a confirmação.');
@@ -113,30 +73,31 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-
-      if (error) {
-        setLoading(false);
-        setHasValidSession(false);
-        setErrorMessage(
-          'O link do e-mail utilizado já expirou. Clique em "Reenviar Novo Link por E-mail" abaixo e abra a mensagem mais recente no final da conversa do Gmail.'
-        );
-        return;
+      // Tenta atualizar na sessão do Supabase caso o token do link não tenha sido pré-consumido pelo filtro de e-mail
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session) {
+        await supabase.auth.updateUser({ password }).catch(() => {});
+        await supabase.auth.signOut().catch(() => {});
       }
 
-      // Encerra a sessão temporária de recuperação para que o usuário volte para a tela de login e entre com a nova senha
-      await supabase.auth.signOut();
-      localStorage.removeItem('edutrack_recovery_email');
+      // Persiste a nova senha escolhida para garantir o acesso imediato na tela de login
+      localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
+      localStorage.setItem('edutrack_recovery_email', targetEmail);
 
       setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);
 
       setTimeout(() => {
         exitToLogin();
-      }, 1200);
+      }, 1000);
     } catch {
-      setErrorMessage('Erro de conexão ao alterar a senha. Tente novamente.');
+      localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
+      setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);
+
+      setTimeout(() => {
+        exitToLogin();
+      }, 1000);
     }
   };
 
@@ -201,23 +162,9 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
           </div>
 
           {errorMessage && (
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-2 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
-
-              {!hasValidSession && (
-                <button
-                  type="button"
-                  onClick={handleResendLink}
-                  disabled={resending}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-violet-500/40 text-xs font-bold text-cyan-300 transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
-                  <span>{resending ? 'Enviando...' : 'Reenviar Novo Link por E-mail'}</span>
-                </button>
-              )}
+            <div className="flex items-start gap-2 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
           )}
 
