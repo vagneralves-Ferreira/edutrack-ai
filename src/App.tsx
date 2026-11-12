@@ -1,5 +1,5 @@
 import { ResetPasswordView } from './views/ResetPasswordView';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PlannerProvider } from './context/PlannerContext';
@@ -15,6 +15,7 @@ import { TasksView } from './views/TasksView';
 import { TimerView } from './views/TimerView';
 import { AiAssistantView } from './views/AiAssistantView';
 import { NewTaskModal } from './components/tasks/NewTaskModal';
+import { supabase } from './lib/supabase';
 
 const MainLayout: React.FC = () => {
   return (
@@ -42,28 +43,56 @@ const MainLayout: React.FC = () => {
 };
 
 export default function App() {
+  const [isRecoveryFlow, setIsRecoveryFlow] = useState<boolean>(() => {
+    const pathname = window.location.pathname || '';
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    return (
+      pathname.includes('reset-password') ||
+      hash.includes('type=recovery') ||
+      hash.includes('otp_expired') ||
+      search.includes('type=recovery')
+    );
+  });
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryFlow(true);
+        window.location.hash = '#/reset-password';
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <ThemeProvider>
       <HashRouter>
         <AuthProvider>
           <PlannerProvider>
             <TimerProvider>
-              <Routes>
-                {/* Public Authentication Screens */}
-                <Route path="/login" element={<LoginView />} />
-                <Route path="/cadastro" element={<RegisterView />} />
-                <Route path="/reset-password" element={<ResetPasswordView />} />
+              {isRecoveryFlow ? (
+                <ResetPasswordView />
+              ) : (
+                <Routes>
+                  {/* Public Authentication Screens */}
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/cadastro" element={<RegisterView />} />
+                  <Route path="/reset-password" element={<ResetPasswordView />} />
 
-                {/* Protected Academic Modules */}
-                <Route
-                  path="/*"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
+                  {/* Protected Academic Modules */}
+                  <Route
+                    path="/*"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+              )}
             </TimerProvider>
           </PlannerProvider>
         </AuthProvider>

@@ -97,19 +97,22 @@ export const LoginView: React.FC = () => {
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
-      setErrorMessage('Por favor, preencha o e-mail institucional para recuperar a palavra-passe.');
+      setErrorMessage('Por favor, preencha o e-mail institucional para recuperar a senha.');
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const baseOrigin = window.location.origin.startsWith('http')
+      ? window.location.origin
+      : 'https://edutrack-ai-mauve-eight.vercel.app';
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${baseOrigin}/reset-password`,
     });
     setLoading(false);
     
     if (error) {
       setErrorMessage(error.message);
     } else {
-      alert('Se o e-mail estiver registrado, receberá um link para redefinir a palavra-passe.');
+      alert('Se o e-mail estiver registrado, receberá um link para redefinir a senha.');
     }
   };
 
