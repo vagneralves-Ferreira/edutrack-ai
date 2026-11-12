@@ -109,7 +109,7 @@ export const LoginView: React.FC = () => {
     if (error) {
       setErrorMessage(error.message);
     } else {
-      alert('Se o e-mail estiver registado, receberá um link para redefinir a palavra-passe.');
+      alert('Se o e-mail estiver registrado, receberá um link para redefinir a palavra-passe.');
     }
   };
 
