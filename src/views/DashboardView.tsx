@@ -22,7 +22,13 @@ export const DashboardView: React.FC = () => {
           <QuickStats subjects={subjects} tasks={tasks} />
         </div>
         <div className="lg:col-span-3">
-          <AiDica tela="Visão Geral" />
+          <AiDica
+            tela="Visão Geral"
+            contexto={{
+              disciplinas: subjects.length,
+              tarefasPendentes: tasks.filter((t) => t.status !== 'completed').length,
+            }}
+          />
         </div>
       </section>
 

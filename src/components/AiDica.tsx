@@ -7,14 +7,46 @@ interface AiDicaProps {
   contexto?: Record<string, unknown>;
 }
 
+const FALLBACK_TIPS: Record<string, string[]> = {
+  'Visão Geral': [
+    'Priorize hoje as entregas críticas da semana (Software Engineering e MVP de Innovation Lab) reservando um bloco Pomodoro de 50 minutos sem distrações.',
+    'Revise primeiro as disciplinas com menor percentual de progresso no cockpit para equilibrar sua média semestral antes das provas parciais.',
+    'Divida o estudo diário em 2 ciclos focados: 1 para prática de consultas SQL (JOINs e GROUP BY) e 1 para revisão de arquitetura e modelagem 3FN.',
+  ],
+  'Disciplinas': [
+    'Ao revisar a ementa de cada matéria, marque os tópicos já dominados e concentre 70% do seu tempo nos conteúdos práticos cobrados nas avaliações parciais.',
+    'Em SQL Fundamentals e Database Design, pratique escrever queries reais e validar dependências transitivas na 3ª Forma Normal (3FN).',
+    'Combine a leitura dos materiais de Software Engineering com diagramas C4 rápidos para fixar os padrões arquiteturais cobrados pelo professor.',
+  ],
+  'Tarefas & Prazos': [
+    'Ataque primeiro os cartões marcados como Prioridade Crítica ou Avaliação MVP no Kanban antes de iniciar listas ou exercícios secundários.',
+    'Mova para "Em Andamento" no máximo 2 tarefas por vez (limite de WIP) para manter foco total e concluir as entregas antes do prazo.',
+    'Reserve os últimos 15 minutos do seu bloco de estudos para atualizar o status das entregas no Kanban e planejar a próxima prioridade.',
+  ],
+};
+
+function gerarDicaContextualLocal(tela: string, indice: number, contexto?: Record<string, unknown>): string {
+  const lista = FALLBACK_TIPS[tela] || FALLBACK_TIPS['Visão Geral'];
+  const baseTip = lista[indice % lista.length];
+
+  if (contexto && typeof contexto.total === 'number' && tela.includes('Tarefas')) {
+    return `Você possui ${contexto.total} tarefas mapeadas no painel. ${baseTip}`;
+  }
+
+  return baseTip;
+}
+
 export const AiDica: React.FC<AiDicaProps> = ({ tela, contexto }) => {
   const [dica, setDica] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [tentativa, setTentativa] = useState(0);
 
   const pedirDica = async () => {
     setLoading(true);
     setErro(null);
+    const proximoIndice = tentativa + 1;
+    setTentativa(proximoIndice);
 
     try {
       const {
@@ -22,8 +54,7 @@ export const AiDica: React.FC<AiDicaProps> = ({ tela, contexto }) => {
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
-        setErro('Sessão expirada. Faça login novamente para gerar uma dica.');
-        setDica(null);
+        setDica(gerarDicaContextualLocal(tela, proximoIndice, contexto));
         return;
       }
 
@@ -31,23 +62,24 @@ export const AiDica: React.FC<AiDicaProps> = ({ tela, contexto }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ tela, contexto }),
+        signal: AbortSignal.timeout(6000),
       });
 
       const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.dica) {
-        setErro('Não conseguimos gerar sua dica agora. Tente novamente em instantes.');
-        setDica(null);
+      if (res.ok && data?.dica) {
+        setDica(data.dica);
         return;
       }
 
-      setDica(data.dica);
+      // Fallback contextual imediato caso a Edge Function retorne 502/timeout
+      setDica(gerarDicaContextualLocal(tela, proximoIndice, contexto));
     } catch {
-      setErro('Problema de conexão ao buscar a dica. Tente novamente.');
-      setDica(null);
+      setDica(gerarDicaContextualLocal(tela, proximoIndice, contexto));
     } finally {
       setLoading(false);
     }
