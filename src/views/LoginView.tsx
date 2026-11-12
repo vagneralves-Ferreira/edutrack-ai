@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
 import {
   Mail,
@@ -10,7 +11,9 @@ import {
   AlertTriangle,
   ArrowRight,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,6 +22,7 @@ export const LoginView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signIn, register } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -110,7 +114,26 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-6 relative">
+      {/* Floating Theme Toggle on Login Screen */}
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="fixed top-5 right-5 z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
+      >
+        {theme === 'dark' ? (
+          <>
+            <Sun className="w-4 h-4 text-amber-400" />
+            <span>Modo Claro</span>
+          </>
+        ) : (
+          <>
+            <Moon className="w-4 h-4 text-violet-600" />
+            <span>Modo Escuro</span>
+          </>
+        )}
+      </button>
+
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
         <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
@@ -118,7 +141,7 @@ export const LoginView: React.FC = () => {
           <div className="pointer-events-none absolute -bottom-20 -right-20 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
 
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.06] border border-white/[0.1] mb-6">
+            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/[0.12] mb-6">
               <Sparkles className="w-4 h-4 text-cyan-400" />
               <span className="text-xs font-extrabold tracking-wide text-white">EDUTRACK AI 2.0</span>
             </div>
@@ -135,11 +158,11 @@ export const LoginView: React.FC = () => {
           </div>
 
           <div className="relative z-10 space-y-2.5 text-xs text-slate-300">
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Sincronização em nuvem via Supabase</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
               <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
               <span>Dicas de estudo com Gemini AI em tempo real</span>
             </div>

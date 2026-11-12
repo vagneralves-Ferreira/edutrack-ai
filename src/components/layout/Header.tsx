@@ -14,11 +14,14 @@ import {
   Timer,
   Plus,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTimer } from '../../context/TimerContext';
+import { useTheme } from '../../context/ThemeContext';
 import type { ViewTab } from '../../types';
 
 function formatShortTime(date = new Date()): string {
@@ -34,6 +37,7 @@ export const Header: React.FC = () => {
   const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen } = usePlanner();
   const { currentUser, logout } = useAuth();
   const { isActive: isTimerActive, formattedTime } = useTimer();
+  const { theme, toggleTheme } = useTheme();
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(studentName);
@@ -78,7 +82,7 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3 pb-2">
-      <div className="max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-4 sm:px-5 h-16 flex items-center justify-between gap-4">
+      <div className="top-dock-shell max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-4 sm:px-5 h-16 flex items-center justify-between gap-4 transition-all">
         
         {/* Left: Brand Identity + Impacta Pill */}
         <div className="flex items-center gap-3 shrink-0">
@@ -108,7 +112,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Center: Floating Segmented Navigation Pills (Desktop) */}
-        <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
+        <nav className="top-dock-nav hidden lg:flex items-center gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -140,7 +144,7 @@ export const Header: React.FC = () => {
           })}
         </nav>
 
-        {/* Right: Actions, Clock, Notifications, User Profile */}
+        {/* Right: Actions, Theme Toggle, Clock, Notifications, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Quick New Task Button */}
           <button
@@ -157,6 +161,25 @@ export const Header: React.FC = () => {
             <span>{currentDateTime}</span>
           </div>
 
+          {/* Theme Toggle Button (Light / Dark Mode) */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer"
+            title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span className="text-[11px] font-semibold hidden md:inline">Claro</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-violet-600" />
+                <span className="text-[11px] font-semibold hidden md:inline">Escuro</span>
+              </>
+            )}
+          </button>
+
           {/* Notifications Dropdown */}
           <div className="relative">
             <button
@@ -171,7 +194,7 @@ export const Header: React.FC = () => {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#12131f]/95 backdrop-blur-2xl border border-white/[0.12] shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="bento-card absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">Radar de Avaliações</h4>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold">{criticalTasks.length} críticos</span>
@@ -259,7 +282,7 @@ export const Header: React.FC = () => {
 
       {/* Mobile Dropdown Navigation */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mt-2 rounded-2xl bg-[#10111a]/95 backdrop-blur-2xl border border-white/[0.1] p-4 space-y-2 shadow-2xl">
+        <div className="lg:hidden mt-2 rounded-2xl bento-card p-4 space-y-2 shadow-2xl">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

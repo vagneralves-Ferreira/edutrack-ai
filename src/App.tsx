@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PlannerProvider } from './context/PlannerContext';
 import { TimerProvider } from './context/TimerContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginView } from './views/LoginView';
 import { RegisterView } from './views/RegisterView';
@@ -18,7 +19,7 @@ import { NewTaskModal } from './components/tasks/NewTaskModal';
 const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex flex-col antialiased">
-      {/* Top Floating Command Bar (replaces the old left sidebar layout) */}
+      {/* Top Floating Command Bar */}
       <Header />
 
       {/* Full-Width Bento Cockpit Workspace */}
@@ -42,29 +43,31 @@ const MainLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <HashRouter>
-      <AuthProvider>
-        <PlannerProvider>
-          <TimerProvider>
-            <Routes>
-              {/* Public Authentication Screens */}
-              <Route path="/login" element={<LoginView />} />
-              <Route path="/cadastro" element={<RegisterView />} />
-              <Route path="/reset-password" element={<ResetPasswordView />} />
+    <ThemeProvider>
+      <HashRouter>
+        <AuthProvider>
+          <PlannerProvider>
+            <TimerProvider>
+              <Routes>
+                {/* Public Authentication Screens */}
+                <Route path="/login" element={<LoginView />} />
+                <Route path="/cadastro" element={<RegisterView />} />
+                <Route path="/reset-password" element={<ResetPasswordView />} />
 
-              {/* Protected Academic Modules */}
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </TimerProvider>
-        </PlannerProvider>
-      </AuthProvider>
-    </HashRouter>
+                {/* Protected Academic Modules */}
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </TimerProvider>
+          </PlannerProvider>
+        </AuthProvider>
+      </HashRouter>
+    </ThemeProvider>
   );
 }
