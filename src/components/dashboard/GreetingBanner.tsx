@@ -1,59 +1,106 @@
 import React from 'react';
-import { ArrowRight, Sparkles, GraduationCap, AlertCircle } from 'lucide-react';
+import { ArrowRight, Sparkles, GraduationCap, Flame } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
+import { getGreeting } from '../../utils/helpers';
 
 export const GreetingBanner: React.FC = () => {
-  const { setActiveTab } = usePlanner();
+  const { setActiveTab, studentName, subjects } = usePlanner();
+  const { greeting } = getGreeting(studentName);
+
+  const avgProgress = subjects.length > 0
+    ? Math.round(subjects.reduce((sum, s) => sum + s.progress, 0) / subjects.length)
+    : 0;
+
+  const radius = 36;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (avgProgress / 100) * circumference;
 
   return (
-    <div className="bento-card relative overflow-hidden rounded-2xl p-6 sm:p-7 h-full flex flex-col justify-between">
-      {/* Subtle decorative radial glow */}
-      <div className="pointer-events-none absolute -top-20 -right-20 w-64 h-64 rounded-full bg-amber-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl" />
+    <div className="bento-card relative overflow-hidden rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between border-violet-500/25">
+      {/* Electric Violet & Cyan Mesh Glow */}
+      <div className="pointer-events-none absolute -top-24 -right-16 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-16 w-64 h-64 rounded-full bg-cyan-500/15 blur-3xl" />
 
-      <div className="relative z-10">
-        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[11px] font-semibold mb-3">
-          <GraduationCap className="w-3.5 h-3.5 text-sky-400" />
-          <span>Faculdade Impacta Tecnologia • Semestre 2026.2</span>
+      <div className="relative z-10 flex items-start justify-between gap-4">
+        <div className="space-y-2.5 max-w-md">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[11px] font-bold tracking-wide">
+            <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
+            <span>FACULDADE IMPACTA • 2026.2</span>
+          </div>
+
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
+            {greeting}{' '}
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
+              Cockpit Acadêmico
+            </span>
+          </h1>
+
+          <p className="text-xs text-slate-300/85 leading-relaxed">
+            Acompanhe suas {subjects.length} disciplinas em tempo real, priorize entregas críticas e estude com foco guiado por IA.
+          </p>
         </div>
 
-        <h2 className="text-xl sm:text-2xl lg:text-[26px] font-extrabold text-white tracking-tight font-sans leading-tight">
-          Painel de Gestão &{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400">
-            Produtividade Acadêmica
-          </span>
-        </h2>
-
-        <p className="mt-2 text-xs sm:text-sm text-slate-300/90 leading-relaxed max-w-2xl">
-          Monitore o avanço das 5 disciplinas ativas e organize suas entregas com apoio do cronômetro de foco e do assistente inteligente.
-        </p>
+        {/* Circular SVG Gauge for Overall Semester Progress */}
+        <div className="hidden sm:flex flex-col items-center justify-center shrink-0 bg-black/30 border border-white/[0.08] rounded-2xl p-3">
+          <div className="relative w-20 h-20 flex items-center justify-center">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
+              <circle
+                cx="44"
+                cy="44"
+                r={radius}
+                fill="transparent"
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth="7"
+              />
+              <circle
+                cx="44"
+                cy="44"
+                r={radius}
+                fill="transparent"
+                stroke="url(#heroGaugeGrad)"
+                strokeWidth="7"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={dashOffset}
+              />
+              <defs>
+                <linearGradient id="heroGaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#06b6d4" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-sm font-black text-white font-mono">{avgProgress}%</span>
+              <span className="text-[8px] uppercase tracking-wider text-cyan-300 font-bold">Semestre</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Compact deadline notice pill */}
-        <div className="flex items-start sm:items-center gap-2 text-xs text-slate-300 bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-3 py-2">
-          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
-          <span className="leading-snug">
-            Destaque: <strong className="text-amber-300 font-semibold">Avaliação Parcial MVP</strong> (08/09) e provas em <strong className="text-white">08/09</strong> e <strong className="text-white">10/09</strong>.
+      {/* Bottom Bar inside Hero Card */}
+      <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[11px] text-rose-200 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3 py-1.5">
+          <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+          <span>
+            Radar: <strong className="text-white">MVP Innovation Lab (08/09)</strong> & Provas (10/09)
           </span>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('tarefas')}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/15 transition-all active:scale-[0.98] cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
           >
-            <span>Tarefas</span>
+            <span>Abrir Kanban</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
-
           <button
             onClick={() => setActiveTab('ai-assistant')}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] text-slate-200 hover:text-white font-semibold text-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-cyan-300 font-semibold text-xs transition-all cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>AI Advisor</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Copilot</span>
           </button>
         </div>
       </div>

@@ -9,7 +9,8 @@ import {
   EyeOff,
   AlertTriangle,
   ArrowRight,
-  GraduationCap
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,7 +27,6 @@ export const LoginView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Redireciona para o dashboard se já estiver autenticado
   React.useEffect(() => {
     if (user) {
       const from = (location.state as any)?.from?.pathname || '/dashboard';
@@ -51,9 +51,7 @@ export const LoginView: React.FC = () => {
     }
 
     setLoading(true);
-
     const result = await signIn(trimmedEmail, password);
-
     setLoading(false);
 
     if (!result.success) {
@@ -66,7 +64,6 @@ export const LoginView: React.FC = () => {
   const handleRegister = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail && !password) {
-      // Sem dados preenchidos na tela de login, segue para a tela dedicada /cadastro
       return;
     }
 
@@ -113,90 +110,124 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0c10] text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 shadow-md mb-4">
-            <GraduationCap className="w-7 h-7 text-amber-400" />
+    <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
+        {/* Left Branding Bento Showcase */}
+        <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
+          <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-20 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
+
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.06] border border-white/[0.1] mb-6">
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-extrabold tracking-wide text-white">EDUTRACK AI 2.0</span>
+            </div>
+
+            <h2 className="text-3xl font-black text-white leading-tight tracking-tight">
+              Seu Cockpit Acadêmico{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-300">
+                Inteligente
+              </span>
+            </h2>
+            <p className="text-xs text-slate-300/85 mt-3 leading-relaxed">
+              Planejamento em Bento Grid integrado ao Supabase e Gemini AI para as disciplinas da Faculdade Impacta Tecnologia.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">EduTrack AI</h1>
-          <p className="text-slate-400 text-sm mt-1">Planner Acadêmico · Faculdade Impacta</p>
+
+          <div className="relative z-10 space-y-2.5 text-xs text-slate-300">
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Sincronização em nuvem via Supabase</span>
+            </div>
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+              <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>Dicas de estudo com Gemini AI em tempo real</span>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-slate-800/50 rounded-2xl p-7 shadow-xl space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">E-mail institucional</label>
-            <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@exemplo.com"
-                className="w-full bg-slate-800/70 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-              />
-            </div>
+        {/* Right Login Form */}
+        <div className="lg:col-span-6 p-7 sm:p-10 flex flex-col justify-center">
+          <div className="mb-6">
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
+            <p className="text-slate-400 text-xs mt-1">Entre com sua conta institucional da Faculdade Impacta</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Senha</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-800/70 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">E-mail institucional</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nome@impacta.edu.br"
+                  className="w-full bg-white/[0.04] border border-white/[0.09] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-white/[0.04] border border-white/[0.09] rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded bg-white/10 accent-violet-500"
+                />
+                Lembrar de mim
+              </label>
+              <button type="button" onClick={handleResetPassword} className="text-cyan-400 hover:text-violet-300 font-semibold cursor-pointer">
+                Esqueci a senha
               </button>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="rounded bg-slate-800/70 accent-amber-500"
-              />
-              Lembrar de mim
-            </label>
-            <button type="button" onClick={handleResetPassword} className="text-amber-400 hover:text-amber-300 cursor-pointer">
-              Esqueci a senha
+            {errorMessage && (
+              <div className="flex items-start gap-2 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 disabled:opacity-60 text-white font-bold rounded-xl py-3 text-sm shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
+            >
+              {loading ? 'Entrando...' : 'Entrar no EduTrack AI'}
+              {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
-          </div>
+          </form>
 
-          {errorMessage && (
-            <div className="flex items-start gap-2 bg-red-500/15 rounded-xl px-3.5 py-2.5 text-sm text-red-400 shadow-sm">
-              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-[#0a0c10] font-semibold rounded-xl py-2.5 text-sm shadow-md transition-colors cursor-pointer"
-          >
-            {loading ? 'Entrando...' : 'Entrar'}
-            {!loading && <ArrowRight className="w-4 h-4" />}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-slate-400 mt-6">
-          Não tem conta?{' '}
-          <Link to="/cadastro" onClick={handleRegister} className="text-amber-400 hover:text-amber-300 font-medium">
-            Cadastre-se
-          </Link>
-        </p>
+          <p className="text-center text-xs text-slate-400 mt-6">
+            Não tem conta?{' '}
+            <Link to="/cadastro" onClick={handleRegister} className="text-cyan-400 hover:text-violet-300 font-bold">
+              Cadastre-se gratuitamente
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

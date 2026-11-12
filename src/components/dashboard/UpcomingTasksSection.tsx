@@ -34,14 +34,12 @@ export const UpcomingTasksSection: React.FC = () => {
     }, 2100);
   };
 
-  // Filter tasks
   const filteredTasks = tasks.filter((task) => {
     if (filter === 'mvp') return (task.isCriticalMvp || task.subjectId === 'innovation-lab') && task.status !== 'completed';
     if (filter === 'pending') return task.status !== 'completed';
     return true;
   });
 
-  // Sort tasks by due date (critical evaluations and Classroom imports first)
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     const isCritA = a.isCriticalMvp || a.priority === 'critica';
     const isCritB = b.isCriticalMvp || b.priority === 'critica';
@@ -53,19 +51,19 @@ export const UpcomingTasksSection: React.FC = () => {
   const criticalMvpCount = tasks.filter(t => (t.isCriticalMvp || t.subjectId === 'innovation-lab') && t.status !== 'completed').length;
 
   return (
-    <div className="bento-card rounded-2xl p-6 h-full flex flex-col justify-between">
+    <div className="bento-card rounded-3xl p-6 h-full flex flex-col justify-between">
       <div>
         {/* Header with Title and Filter Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <div className="p-2 rounded-xl bg-rose-500/15 border border-rose-500/25 text-rose-400">
               <Flame className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
-                Tarefas Próximas & Prazos Críticos
+              <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2 flex-wrap">
+                Radar de Entregas & Prazos Críticos
                 {criticalMvpCount > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/35">
                     {criticalMvpCount} MVP
                   </span>
                 )}
@@ -81,34 +79,34 @@ export const UpcomingTasksSection: React.FC = () => {
             <button
               onClick={handleSyncClassroom}
               disabled={isSyncingClassroom}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-xs font-semibold transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-all cursor-pointer"
               title="Sincronizar com Google Classroom"
             >
               <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden sm:inline">Classroom</span>
             </button>
 
-            <div className="flex p-1 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs">
+            <div className="flex p-1 rounded-xl bg-black/40 border border-white/[0.07] text-xs">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  filter === 'all' ? 'bg-white/[0.1] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  filter === 'all' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Todas ({tasks.length})
               </button>
               <button
                 onClick={() => setFilter('mvp')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  filter === 'mvp' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  filter === 'mvp' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 ⭐ MVP
               </button>
               <button
                 onClick={() => setFilter('pending')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  filter === 'pending' ? 'bg-white/[0.1] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  filter === 'pending' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Pendentes
@@ -117,7 +115,7 @@ export const UpcomingTasksSection: React.FC = () => {
 
             <button
               onClick={() => setIsNewTaskModalOpen(true)}
-              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-cyan-300 transition-colors cursor-pointer"
               title="Nova Tarefa"
             >
               <Plus className="w-4 h-4" />
@@ -138,18 +136,17 @@ export const UpcomingTasksSection: React.FC = () => {
               const isCompleted = task.status === 'completed';
               const { label, isUrgent } = getDaysRemaining(task.dueDate);
 
-              // Special highlighted layout for critical evaluation tasks (08/09 and 10/09)
               if ((task.isCriticalMvp || (task.type === 'avaliacao' && task.priority === 'critica')) && !isCompleted) {
                 return (
                   <div
                     key={task.id}
-                    className="relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-500/12 via-white/[0.03] to-white/[0.02] border border-amber-500/25 p-4 transition-all hover:border-amber-500/40 group"
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600/15 via-fuchsia-600/10 to-white/[0.02] border border-violet-500/35 p-4 transition-all hover:border-cyan-400/50 group"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
                         <button
                           onClick={() => updateTaskStatus(task.id, 'completed')}
-                          className="mt-0.5 text-amber-400 hover:text-emerald-400 transition-colors shrink-0 cursor-pointer"
+                          className="mt-0.5 text-violet-400 hover:text-emerald-400 transition-colors shrink-0 cursor-pointer"
                           title="Marcar como Concluída"
                         >
                           <Circle className="w-4 h-4" />
@@ -157,22 +154,22 @@ export const UpcomingTasksSection: React.FC = () => {
 
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-slate-950 flex items-center gap-1">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white flex items-center gap-1">
                               <AlertTriangle className="w-2.5 h-2.5" />
                               {task.subjectId === 'innovation-lab' ? 'AVALIAÇÃO PARCIAL MVP' : 'AVALIAÇÃO PARCIAL'}
                             </span>
-                            <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-500/25 px-2 py-0.5 rounded-md">
                               {task.subjectName}
                             </span>
                             {task.importedFromClassroom && (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300">
                                 <BookMarked className="w-2.5 h-2.5 text-emerald-400" />
                                 Classroom
                               </span>
                             )}
                           </div>
 
-                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
                             {task.title}
                           </h4>
                           <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
@@ -181,13 +178,12 @@ export const UpcomingTasksSection: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Due Date & Urgency Pill */}
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300 font-mono text-[11px] font-bold">
-                          <Calendar className="w-3 h-3 text-amber-400" />
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-violet-500/20 border border-violet-500/35 text-violet-200 font-mono text-[11px] font-bold">
+                          <Calendar className="w-3 h-3 text-cyan-400" />
                           <span>{formatDateBR(task.dueDate)}</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-amber-400/90 font-mono">
+                        <span className="text-[10px] font-semibold text-rose-400 font-mono">
                           {label}
                         </span>
                       </div>
@@ -196,14 +192,13 @@ export const UpcomingTasksSection: React.FC = () => {
                 );
               }
 
-              // Standard task card
               return (
                 <div
                   key={task.id}
-                  className={`rounded-xl p-3.5 border transition-all flex items-center justify-between gap-3 ${
+                  className={`rounded-2xl p-3.5 border transition-all flex items-center justify-between gap-3 ${
                     isCompleted
                       ? 'bg-white/[0.01] border-white/[0.04] opacity-55'
-                      : 'bg-white/[0.025] border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.12]'
+                      : 'bg-white/[0.025] border-white/[0.07] hover:bg-white/[0.05] hover:border-violet-500/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -219,7 +214,7 @@ export const UpcomingTasksSection: React.FC = () => {
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="text-[10px] font-semibold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-semibold text-cyan-300 bg-cyan-500/10 px-1.5 py-0.5 rounded">
                           {task.subjectName}
                         </span>
                         {task.importedFromClassroom && (
@@ -254,7 +249,7 @@ export const UpcomingTasksSection: React.FC = () => {
                       <span className="text-xs font-mono text-slate-300 font-medium block">
                         {formatDateBR(task.dueDate)}
                       </span>
-                      <span className={`text-[10px] ${isUrgent && !isCompleted ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] ${isUrgent && !isCompleted ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
                         {label}
                       </span>
                     </div>
@@ -274,7 +269,7 @@ export const UpcomingTasksSection: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('tarefas')}
-          className="text-xs font-semibold text-sky-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
+          className="text-xs font-bold text-cyan-400 hover:text-violet-300 transition-colors flex items-center gap-1 cursor-pointer"
         >
           <span>Abrir quadro Kanban</span>
           <ArrowRight className="w-3.5 h-3.5" />
@@ -298,7 +293,7 @@ export const UpcomingTasksSection: React.FC = () => {
                 {syncStepMessage}
               </h3>
               <p className="text-xs text-slate-400">
-                Conectado ao domínio institucional <span className="text-amber-400 font-mono">@impacta.edu.br</span>
+                Conectado ao domínio institucional <span className="text-cyan-400 font-mono">@impacta.edu.br</span>
               </p>
             </div>
 

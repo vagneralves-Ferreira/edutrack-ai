@@ -2,15 +2,14 @@
 
 @layer base {
   :root {
-    --bg-main: #06080f;
-    --bg-surface: #0d111d;
-    --bg-surface-elevated: #131929;
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --accent-amber: #f59e0b;
-    --accent-orange: #f97316;
-    --accent-blue: #38bdf8;
-    --accent-indigo: #6366f1;
+    --bg-main: #07070b;
+    --bg-surface: #101118;
+    --bg-surface-elevated: #161822;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(139, 92, 246, 0.35);
+    --accent-violet: #8b5cf6;
+    --accent-cyan: #06b6d4;
+    --accent-emerald: #10b981;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
@@ -19,9 +18,11 @@
   body {
     background-color: var(--bg-main);
     background-image: 
-      radial-gradient(at 15% 0%, rgba(99, 102, 241, 0.09) 0px, transparent 45%),
-      radial-gradient(at 85% 5%, rgba(245, 158, 11, 0.06) 0px, transparent 40%),
-      radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%);
+      radial-gradient(at 10% 0%, rgba(139, 92, 246, 0.16) 0px, transparent 45%),
+      radial-gradient(at 90% 5%, rgba(6, 182, 212, 0.12) 0px, transparent 40%),
+      radial-gradient(at 50% 95%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+      radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 24px 24px;
     background-attachment: fixed;
     color: var(--text-primary);
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -34,41 +35,41 @@
 
 /* Bento Card utility styling */
 .bento-card {
-  background: linear-gradient(180deg, rgba(17, 23, 38, 0.78) 0%, rgba(12, 16, 28, 0.85) 100%);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  background: linear-gradient(165deg, rgba(22, 24, 36, 0.82) 0%, rgba(13, 14, 22, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .bento-card-interactive {
-  background: linear-gradient(180deg, rgba(17, 23, 38, 0.78) 0%, rgba(12, 16, 28, 0.85) 100%);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  background: linear-gradient(165deg, rgba(22, 24, 36, 0.82) 0%, rgba(13, 14, 22, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .bento-card-interactive:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(139, 92, 246, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px -12px rgba(139, 92, 246, 0.2), inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
 }
 
-/* Custom scrollbar for obsidian style */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #06080f;
+  background: #07070b;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e2638;
+  background: #27273a;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2e3a52;
+  background: #8b5cf6;
 }
