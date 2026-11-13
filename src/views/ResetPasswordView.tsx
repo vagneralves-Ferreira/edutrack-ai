@@ -127,7 +127,26 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
 
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md bento-card rounded-3xl p-8 border-violet-500/25 shadow-2xl">
+      <div className="w-full max-w-md screen-stack-stage pt-6">
+        <div
+          onClick={() => navigate('/cadastro')}
+          className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-5 pt-1.5 opacity-75 hover:opacity-100 transition-all"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
+            Criar Perfil Acadêmico
+          </span>
+          <span className="text-[10px] text-slate-400">Cadastro</span>
+        </div>
+        <div
+          onClick={exitToLogin}
+          className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-5 pt-1.5 opacity-90 hover:opacity-100 transition-all"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
+            Acessar Cockpit • Login
+          </span>
+          <span className="text-[10px] text-slate-300">Voltar ao Login →</span>
+        </div>
+        <div className="relative z-10 screen-emerge-behind w-full bento-card rounded-3xl p-8 border-violet-500/25 shadow-2xl">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 mb-4 shadow-lg shadow-violet-500/20">
             <KeyRound className="w-7 h-7 text-cyan-400" />
@@ -233,6 +252,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
             <span>Voltar para a Tela de Login</span>
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

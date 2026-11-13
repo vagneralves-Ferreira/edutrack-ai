@@ -111,8 +111,27 @@ export const RegisterView: React.FC = () => {
       </div>
 
       {/* Register Form Card */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-xl relative z-10 px-4 sm:px-0">
-        <div className="rounded-2xl bg-slate-800/50 backdrop-blur-xl p-7 sm:p-9 shadow-2xl">
+      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-xl relative z-10 px-4 sm:px-0">
+        <div className="screen-stack-stage pt-6">
+          <div
+            onClick={() => navigate('/reset-password')}
+            className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-75 hover:opacity-100 transition-all"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
+              Alterar Minha Senha
+            </span>
+            <span className="text-[10px] text-slate-400">Recuperação</span>
+          </div>
+          <div
+            onClick={() => navigate('/login')}
+            className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-90 hover:opacity-100 transition-all"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
+              Acessar Cockpit • Login
+            </span>
+            <span className="text-[10px] text-slate-300">Voltar ao Login →</span>
+          </div>
+          <div className="relative z-10 screen-emerge-behind rounded-3xl bento-card p-7 sm:p-9 shadow-2xl border-violet-500/25">
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-7">
             <div>
@@ -334,6 +353,7 @@ export const RegisterView: React.FC = () => {
                 Fazer Login
               </Link>
             </p>
+          </div>
           </div>
         </div>
 

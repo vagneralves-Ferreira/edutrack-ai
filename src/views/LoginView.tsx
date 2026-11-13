@@ -155,7 +155,29 @@ export const LoginView: React.FC = () => {
         )}
       </button>
 
-      <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
+      <div className="w-full max-w-4xl screen-stack-stage pt-6">
+        <div
+          onClick={() => navigate('/reset-password')}
+          title="Abrir tela Alterar Minha Senha"
+          className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-75 hover:opacity-100 transition-all"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
+            Alterar Minha Senha
+          </span>
+          <span className="text-[10px] text-slate-400">Recuperação de Acesso</span>
+        </div>
+        <div
+          onClick={() => navigate('/cadastro')}
+          title="Abrir tela de Cadastro"
+          className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-90 hover:opacity-100 transition-all"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
+            Criar Perfil Acadêmico • Cadastro
+          </span>
+          <span className="text-[10px] text-slate-300">Clique para puxar para frente →</span>
+        </div>
+
+        <div className="relative z-10 screen-emerge-behind w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
         <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
           <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
@@ -278,6 +300,7 @@ export const LoginView: React.FC = () => {
               Cadastre-se gratuitamente
             </Link>
           </p>
+        </div>
         </div>
       </div>
     </div>
