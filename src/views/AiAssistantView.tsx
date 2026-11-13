@@ -57,36 +57,36 @@ export const AiAssistantView: React.FC = () => {
         aiResponse = {
           id: 'ai-' + Date.now(),
           sender: 'ai',
-          text: 'Para a Avaliação Parcial MVP de Innovation Lab: Advanced No/Low Code (08/09), o foco é validação em produção e valor tangível:',
+          text: 'Para Innovation Lab: Advanced No/Low Code com o Prof. Evandro (Tarefas 19/11 e Entrega Final do Projeto 23/11), o foco é validação em produção e entregas completas:',
           timestamp: 'Agora',
           checklist: [
-            'Verifique se os endpoints e webhooks estão respondendo com status 200 em homologação.',
-            'Documente a hipótese de negócio e métricas iniciais de validação do MVP.',
-            'Prepare um fluxo de ponta a ponta sem interrupções manuais para a demonstração.'
+            'Confirme o upload de todas as tarefas e arquivos Markdown/Docs solicitados para 19/11.',
+            'Verifique se o EduTrack AI em produção na Vercel e no Supabase está funcionando sem erros.',
+            'Prepare a demonstração ponta a ponta da Entrega Final do Projeto para 23/11.'
           ]
         };
-      } else if (lower.includes('08/09') || lower.includes('software engineering') || lower.includes('fábio')) {
+      } else if (lower.includes('software engineering') || lower.includes('fábio') || lower.includes('uml') || lower.includes('cascata')) {
         aiResponse = {
           id: 'ai-' + Date.now(),
           sender: 'ai',
-          text: 'Para a Avaliação Parcial de 08/09 com o Prof. Fábio Nogueira (Software Engineering), a Impacta prioriza clareza arquitetural e entrega de valor:',
+          text: 'Em Software Engineering com o Prof. Fábio Nogueira, suas entregas registradas no Classroom estão concluídas (Cascata, UML 2.5 e AP2). Confira os pontos-chave de revisão:',
           timestamp: 'Agora',
           checklist: [
             'Garanta que seu repositório Git tenha README detalhado com instruções de execução.',
-            'Defina claramente o escopo do protótipo versus entregas futuras.',
-            'Prepare a justificativa das escolhas técnicas: por que utilizou determinada arquitetura (ex: Clean Architecture ou Monólito Modular)?'
+            'Mantenha os diagramas UML e especificações de requisitos organizados.',
+            'Revise os modelos de desenvolvimento (Cascata, Ágil, Scrum e Kanban).'
           ]
         };
-      } else if (lower.includes('10/09') || lower.includes('sql') || lower.includes('evandro') || lower.includes('database')) {
+      } else if (lower.includes('sql') || lower.includes('procedure') || lower.includes('evandro') || lower.includes('database')) {
         aiResponse = {
           id: 'ai-' + Date.now(),
           sender: 'ai',
-          text: 'Para as avaliações de 10/09 (SQL Fundamentals e Database Design com o Prof. Evandro), o foco total deve ser consistência relacional e performance:',
+          text: 'Para SQL Fundamentals, Database Design e Innovation Lab com o Prof. Evandro (destaque para Desafio da Procedure em 07/11), foque em:',
           timestamp: 'Agora',
           checklist: [
-            'Revise a sintaxe de JOINs múltiplos e certifique-se de não criar produto cartesiano acidental.',
-            'Treine a cláusula HAVING: lembre-se de que HAVING filtra grupos, enquanto WHERE filtra tuplas individuais.',
-            'Na 3ª Forma Normal (3FN), elimine dependências transitivas: nenhum atributo não-chave pode depender de outro atributo não-chave.'
+            'Valide parâmetros de entrada/saída e tratamento de erros na Stored Procedure do Desafio.',
+            'Revise JOINs múltiplos e agregações com GROUP BY e HAVING.',
+            'Na 3ª Forma Normal (3FN), elimine dependências transitivas entre atributos não-chave.'
           ]
         };
       } else if (lower.includes('algoritmos') || lower.includes('odair') || lower.includes('joão')) {

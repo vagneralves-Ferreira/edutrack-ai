@@ -14,10 +14,15 @@ import {
   CheckSquare,
   FileText,
   GraduationCap,
+  Copy,
+  Check,
+  Link2,
 } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import {
   fetchGoogleClassroomFullData,
+  fetchGoogleAppsScriptClassroom,
+  APPS_SCRIPT_BRIDGE_CODE,
   buildFullClassroomImpactaSync,
   parseClassroomPastedContent,
 } from '../../services/classroomSync';
@@ -39,7 +44,13 @@ export const ClassroomSyncModal: React.FC = () => {
     lastClassroomSync,
   } = usePlanner();
 
-  const [activeMode, setActiveMode] = useState<'full_impacta' | 'google_api' | 'paste_import'>('full_impacta');
+  const [activeMode, setActiveMode] = useState<
+    'apps_script' | 'paste_import' | 'google_api' | 'full_impacta'
+  >('apps_script');
+  const [appsScriptUrl, setAppsScriptUrl] = useState<string>(
+    () => localStorage.getItem('edutrack_apps_script_url') || ''
+  );
+  const [copiedScript, setCopiedScript] = useState<boolean>(false);
   const [accessToken, setAccessToken] = useState<string>(
     () => localStorage.getItem('edutrack_google_classroom_token') || ''
   );
@@ -76,6 +87,46 @@ export const ClassroomSyncModal: React.FC = () => {
     }, 1400);
   };
 
+  const handleCopyAppsScript = async () => {
+    try {
+      await navigator.clipboard.writeText(APPS_SCRIPT_BRIDGE_CODE);
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 2500);
+    } catch {
+      setErrorMsg('Não foi possível copiar automaticamente. Selecione e copie o script manualmente abaixo.');
+    }
+  };
+
+  const handleAppsScriptSync = async () => {
+    const cleanUrl = appsScriptUrl.trim();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!cleanUrl || !cleanUrl.includes('script.google.com')) {
+      setErrorMsg(
+        'Cole a URL do Web App gerada no Google Apps Script (ela começa com https://script.google.com/macros/s/.../exec).'
+      );
+      return;
+    }
+
+    setIsLoading(true);
+    setStepStatus('Buscando todas as turmas, entregas e professores diretamente da sua conta Google Classroom...');
+
+    try {
+      localStorage.setItem('edutrack_apps_script_url', cleanUrl);
+      const result = await fetchGoogleAppsScriptClassroom(cleanUrl);
+      setStepStatus('Atualizando disciplinas, todas as entregas e Cockpit no EduTrack AI...');
+      await applyClassroomSyncResult(result);
+      setIsLoading(false);
+      setSuccessMsg(
+        `Classroom conectado! ${result.stats.coursesCount} turmas, ${result.stats.tasksCount} atividades/entregas, ${result.stats.materialsCount} materiais e ${result.stats.announcementsCount} avisos sincronizados.`
+      );
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMsg(err?.message || 'Erro ao conectar com o Web App do Google Apps Script.');
+    }
+  };
+
   const handleGoogleApiTokenSync = async (tokenToUse?: string) => {
     const token = (tokenToUse ?? accessToken).trim();
     setErrorMsg(null);
@@ -110,7 +161,13 @@ export const ClassroomSyncModal: React.FC = () => {
     const cleanClientId = googleClientId.trim();
     if (!cleanClientId) {
       setErrorMsg(
-        'Para abrir o pop-up direto, informe seu Google OAuth Client ID ou utilize o Token de Acesso OAuth logo abaixo.'
+        'Informe seu Google OAuth Client ID (.apps.googleusercontent.com) ou use a aba "1. Tempo Real (Apps Script)" / "2. Colar do Classroom".'
+      );
+      return;
+    }
+    if (cleanClientId.includes('@') || !cleanClientId.includes('.apps.googleusercontent.com')) {
+      setErrorMsg(
+        'Você digitou um e-mail ou texto inválido no campo Client ID. Aqui vai o ID de aplicativo do Google Cloud (terminado em .apps.googleusercontent.com), NÃO o seu e-mail institucional. Recomendamos usar a aba "1. Tempo Real (Apps Script)" ou "2. Colar do Classroom".'
       );
       return;
     }
@@ -247,33 +304,17 @@ export const ClassroomSyncModal: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setActiveMode('full_impacta');
+              setActiveMode('apps_script');
               setErrorMsg(null);
             }}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'full_impacta'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
+              activeMode === 'apps_script'
+                ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-md shadow-emerald-600/25'
                 : 'bg-white/[0.04] text-slate-400 hover:text-white'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>1. Sincronização Completa Impacta</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveMode('google_api');
-              setErrorMsg(null);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'google_api'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>2. API Oficial Google (OAuth / Token)</span>
+            <Link2 className="w-3.5 h-3.5" />
+            <span>1. Tempo Real (Apps Script)</span>
           </button>
 
           <button
@@ -289,17 +330,130 @@ export const ClassroomSyncModal: React.FC = () => {
             }`}
           >
             <FileJson className="w-3.5 h-3.5" />
-            <span>3. Colar Mural / Importar JSON</span>
+            <span>2. Colar do Classroom (Ctrl+A)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('google_api');
+              setErrorMsg(null);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeMode === 'google_api'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
+                : 'bg-white/[0.04] text-slate-400 hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>3. API Google (Token OAuth)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('full_impacta');
+              setErrorMsg(null);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeMode === 'full_impacta'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
+                : 'bg-white/[0.04] text-slate-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>4. Dados Base Impacta</span>
           </button>
         </div>
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {activeMode === 'apps_script' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
+                    Conector Real da Sua Conta Google Classroom (Sem Client ID)
+                  </h4>
+                  <a
+                    href="https://script.google.com/home/start"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 hover:text-cyan-200"
+                  >
+                    <span>Abrir Google Apps Script</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Por segurança do Google, nenhum site externo enxerga sua conta particular automaticamente. Com este conector oficial do Google (feito em 1 minuto na sua conta), você puxa <strong>todas as turmas, os professores reais (ex: Prof. Evandro) e todas as 15+ entregas de cada matéria</strong> direto do Classroom:
+                </p>
+                <ol className="text-[11px] text-slate-300 space-y-1.5 list-decimal list-inside">
+                  <li>
+                    Clique em <strong>Copiar Script</strong> abaixo e abra o{' '}
+                    <a href="https://script.google.com/home/start" target="_blank" rel="noreferrer" className="text-cyan-300 underline">
+                      script.google.com
+                    </a>{' '}
+                    com seu e-mail <strong>@aluno.impacta.edu.br</strong> → <em>Novo projeto</em>.
+                  </li>
+                  <li>
+                    Cole o código no editor, clique em <strong>Serviços (+)</strong> à esquerda → adicione <strong>Google Classroom API</strong>.
+                  </li>
+                  <li>
+                    Clique em <strong>Implantar → Nova implantação → App da Web</strong> (<em>Executar como: Eu</em>, <em>Quem pode acessar: Qualquer pessoa</em>), autorize e cole a URL gerada abaixo:
+                  </li>
+                </ol>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="text-[11px] font-semibold text-slate-400">Código oficial para colar no Apps Script:</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyAppsScript}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-xs font-bold text-white cursor-pointer"
+                  >
+                    {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-300" />}
+                    <span>{copiedScript ? 'Script Copiado!' : 'Copiar Script'}</span>
+                  </button>
+                </div>
+
+                <pre className="max-h-28 overflow-auto rounded-xl bg-black/50 border border-white/[0.08] p-2.5 text-[10px] text-slate-300 font-mono select-all">
+                  {APPS_SCRIPT_BRIDGE_CODE}
+                </pre>
+
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-bold text-slate-200">
+                    URL do Web App do Apps Script:
+                  </label>
+                  <input
+                    type="url"
+                    value={appsScriptUrl}
+                    onChange={(e) => setAppsScriptUrl(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    className="w-full bg-black/40 border border-white/[0.12] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleAppsScriptSync}
+                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-60 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span>Sincronizar Meu Classroom Real Agora</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeMode === 'full_impacta' && (
             <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-200 leading-relaxed">
+                <strong>Atenção:</strong> Esta aba carrega o <strong>modelo base salvo no aplicativo</strong> (não lê automaticamente entregas novas da sua conta Google Classroom). Para importar todas as 15+ entregas de Innovation Lab e seus avisos reais, use a aba <strong>1. Tempo Real (Apps Script)</strong> ou <strong>2. Colar do Classroom (Ctrl+A)</strong>.
+              </div>
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-cyan-400">
-                  O que será abastecido em todas as telas do seu EduTrack AI:
+                  O que existe no modelo base Impacta:
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
@@ -376,13 +530,13 @@ export const ClassroomSyncModal: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Clique em <strong>"Gerar Token em 1 clique no Google"</strong>, autorize sua conta do Google Classroom,
-                  clique em <em>Exchange authorization code for tokens</em> e cole o <strong>Access token</strong> (`ya29...`) abaixo:
+                  clique em <em>Exchange authorization code for tokens</em> e cole o <strong>Access token</strong> (<code>ya29...</code> — <strong>NÃO</strong> digite sua senha do e-mail) abaixo:
                 </p>
                 <input
-                  type="password"
+                  type="text"
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="ya29.a0AeDClZ..."
+                  placeholder="ya29.a0AeDClZ... (cole o token longo gerado no OAuth Playground, não sua senha)"
                   className="w-full bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-violet-500"
                 />
                 <button
@@ -398,14 +552,14 @@ export const ClassroomSyncModal: React.FC = () => {
 
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-2.5">
                 <label className="block text-xs font-bold text-slate-300">
-                  Opção B: Login via Pop-up OAuth 2.0 (Google Client ID próprio)
+                  Opção B: Login via Pop-up OAuth 2.0 (Google Cloud Client ID — não é seu e-mail)
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={googleClientId}
                     onChange={(e) => setGoogleClientId(e.target.value)}
-                    placeholder="seu-client-id.apps.googleusercontent.com"
+                    placeholder="123456789-xxxx.apps.googleusercontent.com (não digite seu e-mail)"
                     className="flex-1 bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-violet-500"
                   />
                   <button
@@ -426,13 +580,18 @@ export const ClassroomSyncModal: React.FC = () => {
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-bold text-slate-200">
-                    Cole o texto da sua tela do Google Classroom ou envie um JSON (Google Takeout)
+                    Modo Rápido (10 segundos): Copie sua página do Google Classroom ou envie um JSON
                   </label>
                   <label className="px-3 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 text-[11px] font-bold text-violet-300 cursor-pointer">
                     Carregar Arquivo .JSON
                     <input type="file" accept=".json,.txt" onChange={handleFileUpload} className="hidden" />
                   </label>
                 </div>
+                <ol className="text-[11px] text-slate-300 space-y-1 list-decimal list-inside bg-black/25 rounded-xl p-3 border border-white/[0.05]">
+                  <li>Abra a aba <strong>Atividades</strong> da disciplina no Google Classroom (ex: Innovation Lab) ou a tela <strong>Pendentes / Concluídas</strong>.</li>
+                  <li>Pressione <strong>Ctrl + A</strong> (selecionar tudo) e depois <strong>Ctrl + C</strong> (copiar).</li>
+                  <li>Clique na caixa abaixo, pressione <strong>Ctrl + V</strong> e clique em <strong>Processar e Abastecer</strong>.</li>
+                </ol>
                 <textarea
                   rows={5}
                   value={pastedText}

@@ -11,8 +11,50 @@ export interface ClassroomSyncResult {
     evaluationsCount: number;
     announcementsCount: number;
   };
-  source: 'google_api' | 'custom_import' | 'impacta_full';
+  source: 'google_api' | 'apps_script' | 'custom_import' | 'impacta_full';
 }
+
+export interface RawCourseBundle {
+  course: any;
+  teachers: any[];
+  topics?: any[];
+  courseWork: any[];
+  submissions: any[];
+  materials: any[];
+  announcements: any[];
+}
+
+export const APPS_SCRIPT_BRIDGE_CODE = `function doGet() {
+  var resp = Classroom.Courses.list({ courseStates: ['ACTIVE'], pageSize: 30 });
+  var courses = resp.courses || [];
+  var result = courses.map(function(c) {
+    var teachers = [];
+    try { teachers = Classroom.Courses.Teachers.list(c.id).teachers || []; } catch (e) {}
+    var topics = [];
+    try { topics = Classroom.Courses.Topics.list(c.id).topic || []; } catch (e) {}
+    var courseWork = [];
+    try { courseWork = Classroom.Courses.CourseWork.list(c.id, { pageSize: 100 }).courseWork || []; } catch (e) {}
+    var submissions = [];
+    try { submissions = Classroom.Courses.CourseWork.StudentSubmissions.list(c.id, '-', { userId: 'me', pageSize: 100 }).studentSubmissions || []; } catch (e) {}
+    var materials = [];
+    try { materials = Classroom.Courses.CourseWorkMaterials.list(c.id, { pageSize: 50 }).courseWorkMaterial || []; } catch (e) {}
+    var announcements = [];
+    try { announcements = Classroom.Courses.Announcements.list(c.id, { pageSize: 20 }).announcements || []; } catch (e) {}
+    return {
+      course: c,
+      teachers: teachers,
+      topics: topics,
+      courseWork: courseWork,
+      submissions: submissions,
+      materials: materials,
+      announcements: announcements
+    };
+  });
+  return ContentService.createTextOutput(JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    courses: result
+  })).setMimeType(ContentService.MimeType.JSON);
+}`;
 
 const SUBJECT_PALETTES = [
   { color: '#8b5cf6', accentColor: 'from-violet-500 to-indigo-600' },
@@ -53,49 +95,27 @@ function inferTaskType(title: string, description = ''): { type: TaskType; isCri
 }
 
 /**
- * Conecta diretamente na API REST oficial do Google Classroom (v1) usando um OAuth2 Access Token
- * e importa TODOS os cursos, professores, tópicos, materiais, avisos do mural, atividades, notas e entregas.
+ * Constrói o resultado completo do EduTrack AI a partir de pacotes reais da API do Google Classroom
+ * (usado tanto pela API REST OAuth quanto pelo Conector Google Apps Script).
  */
-export async function fetchGoogleClassroomFullData(accessToken: string): Promise<ClassroomSyncResult> {
-  const cleanToken = accessToken.trim().replace(/^Bearer\s+/i, '');
-  const headers = {
-    Authorization: `Bearer ${cleanToken}`,
-    Accept: 'application/json',
-  };
-
-  const coursesRes = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE&pageSize=30', {
-    headers,
-  });
-
-  if (!coursesRes.ok) {
-    const errBody = await coursesRes.json().catch(() => ({}));
-    const msg =
-      errBody?.error?.message ||
-      `Erro HTTP ${coursesRes.status} ao acessar Google Classroom API. Verifique se o token possui os escopos do Classroom.`;
-    throw new Error(msg);
-  }
-
-  const coursesData = await coursesRes.json();
-  const courses: any[] = Array.isArray(coursesData.courses) ? coursesData.courses : [];
-
-  if (courses.length === 0) {
-    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
-  }
-
+export function buildSyncResultFromCourseBundles(
+  bundles: RawCourseBundle[],
+  source: 'google_api' | 'apps_script'
+): ClassroomSyncResult {
   const syncedSubjects: Subject[] = [];
   const syncedTasks: Task[] = [];
   let totalMaterials = 0;
   let totalEvaluations = 0;
   let totalAnnouncements = 0;
 
-  for (let i = 0; i < courses.length; i++) {
-    const course = courses[i];
-    const courseId = String(course.id);
+  for (let i = 0; i < bundles.length; i++) {
+    const bundle = bundles[i];
+    const course = bundle.course || {};
+    const courseId = String(course.id || `cls-${i}`);
     const courseName = String(course.name || 'Disciplina Classroom');
     const courseSection = course.section ? String(course.section) : '';
     const palette = SUBJECT_PALETTES[i % SUBJECT_PALETTES.length];
 
-    // Tenta casar com disciplina já existente para manter IDs canônicos se aplicável
     const matchedInit = INITIAL_SUBJECTS.find(
       (s) =>
         courseName.toLowerCase().includes(s.name.toLowerCase()) ||
@@ -103,42 +123,13 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
     );
     const subjectId = matchedInit ? matchedInit.id : `classroom-subj-${slugify(courseName)}-${courseId.slice(-4)}`;
 
-    // Busca em paralelo: professores, tópicos, atividades (courseWork), submissões, materiais e avisos do mural
-    const [teachersRes, topicsRes, courseWorkRes, submissionsRes, materialsRes, announcementsRes] =
-      await Promise.all([
-        fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/teachers`, { headers }).catch(() => null),
-        fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/topics`, { headers }).catch(() => null),
-        fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=50`, { headers }).catch(() => null),
-        fetch(
-          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me&pageSize=50`,
-          { headers }
-        ).catch(() => null),
-        fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?pageSize=30`, {
-          headers,
-        }).catch(() => null),
-        fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/announcements?pageSize=20`, { headers }).catch(
-          () => null
-        ),
-      ]);
+    const rawTeachers = Array.isArray(bundle.teachers) ? bundle.teachers : [];
+    const teachersList: string[] = rawTeachers
+      .map((t: any) => (typeof t === 'string' ? t : t?.profile?.name?.fullName))
+      .filter(Boolean)
+      .map((name: string) => (name.toLowerCase().startsWith('prof') ? name : `Prof. ${name}`));
 
-    const teachersJson = teachersRes && teachersRes.ok ? await teachersRes.json().catch(() => ({})) : {};
-    const topicsJson = topicsRes && topicsRes.ok ? await topicsRes.json().catch(() => ({})) : {};
-    const courseWorkJson = courseWorkRes && courseWorkRes.ok ? await courseWorkRes.json().catch(() => ({})) : {};
-    const submissionsJson = submissionsRes && submissionsRes.ok ? await submissionsRes.json().catch(() => ({})) : {};
-    const materialsJson = materialsRes && materialsRes.ok ? await materialsRes.json().catch(() => ({})) : {};
-    const announcementsJson =
-      announcementsRes && announcementsRes.ok ? await announcementsRes.json().catch(() => ({})) : {};
-
-    // 1. Professores
-    const teachersList: string[] = Array.isArray(teachersJson.teachers)
-      ? teachersJson.teachers
-          .map((t: any) => t?.profile?.name?.fullName)
-          .filter(Boolean)
-          .map((name: string) => (name.toLowerCase().startsWith('prof') ? name : `Prof. ${name}`))
-      : matchedInit?.professors || ['Prof. Titular (Classroom)'];
-
-    // 2. Tópicos e Módulos
-    const rawTopics: any[] = Array.isArray(topicsJson.topic) ? topicsJson.topic : [];
+    const rawTopics: any[] = Array.isArray(bundle.topics) ? bundle.topics : [];
     const topicNames =
       rawTopics.length > 0
         ? rawTopics.map((t: any) => String(t.name))
@@ -156,18 +147,14 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
           }))
         : matchedInit?.modules || [];
 
-    // 3. Submissões do Aluno (mapeadas por courseWorkId)
     const submissionMap = new Map<string, any>();
-    if (Array.isArray(submissionsJson.studentSubmissions)) {
-      for (const sub of submissionsJson.studentSubmissions) {
-        if (sub.courseWorkId) {
-          submissionMap.set(String(sub.courseWorkId), sub);
-        }
+    for (const sub of bundle.submissions || []) {
+      if (sub?.courseWorkId) {
+        submissionMap.set(String(sub.courseWorkId), sub);
       }
     }
 
-    // 4. Atividades (courseWork) -> Tasks & Evaluations
-    const courseWorkList: any[] = Array.isArray(courseWorkJson.courseWork) ? courseWorkJson.courseWork : [];
+    const courseWorkList: any[] = Array.isArray(bundle.courseWork) ? bundle.courseWork : [];
     const evaluations: Evaluation[] = [];
     let completedWorkCount = 0;
 
@@ -177,7 +164,6 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
       const workDesc = String(work.description || 'Atividade sincronizada diretamente do Google Classroom.');
       const sub = submissionMap.get(workId);
 
-      // Converte status da submissão do Google Classroom
       let status: TaskStatus = 'todo';
       if (sub?.state === 'TURNED_IN' || sub?.state === 'RETURNED') {
         status = 'completed';
@@ -186,7 +172,6 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
         status = 'in_progress';
       }
 
-      // Converte data e hora de entrega
       let dueDate = '2026-11-30';
       let dueTime = '23:59';
       if (work.dueDate && work.dueDate.year) {
@@ -220,7 +205,6 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
         importedFromClassroom: true,
       });
 
-      // Se tiver pontuação máxima ou for avaliação/projeto, adiciona também em Evaluations da disciplina
       if (work.maxPoints || inferred.type === 'avaliacao' || inferred.type === 'avaliacao_mvp' || inferred.type === 'projeto') {
         const assignedGrade =
           typeof sub?.assignedGrade === 'number'
@@ -233,7 +217,7 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
         evaluations.push({
           id: `eval-${courseId}-${workId}`,
           name: workTitle,
-          date: dd && mm ? `${dd}/${mm}` : yyyy || '2026',
+          date: dd && mm ? `${dd}/${mm}/${yyyy || '2026'}` : yyyy || '2026',
           weight: work.maxPoints ? Math.min(100, Number(work.maxPoints)) : 25,
           status: status === 'completed' ? 'completed' : 'pending',
           grade: assignedGrade,
@@ -242,13 +226,8 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
       }
     }
 
-    // 5. Materiais de Aula (courseWorkMaterials) + Avisos do Mural (announcements)
     const materials: StudyMaterial[] = [];
-    const rawMaterials: any[] = Array.isArray(materialsJson.courseWorkMaterial)
-      ? materialsJson.courseWorkMaterial
-      : [];
-
-    for (const mat of rawMaterials) {
+    for (const mat of bundle.materials || []) {
       const attachment = mat.materials?.[0];
       let format = 'Material Classroom';
       if (attachment?.driveFile) format = 'Google Drive / PDF';
@@ -266,10 +245,7 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
       totalMaterials++;
     }
 
-    const rawAnnouncements: any[] = Array.isArray(announcementsJson.announcements)
-      ? announcementsJson.announcements
-      : [];
-    for (const ann of rawAnnouncements.slice(0, 8)) {
+    for (const ann of (bundle.announcements || []).slice(0, 8)) {
       const cleanText = String(ann.text || '').trim();
       if (!cleanText) continue;
       materials.push({
@@ -293,7 +269,7 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
       id: subjectId,
       code: courseSection || matchedInit?.code || `CLS-${courseId.slice(-3)}`,
       name: courseName,
-      professors: teachersList.length > 0 ? teachersList : ['Prof. Impacta'],
+      professors: teachersList.length > 0 ? teachersList : matchedInit?.professors || ['Prof. Impacta'],
       progress,
       totalHours,
       completedHours,
@@ -325,8 +301,111 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
       evaluationsCount: totalEvaluations,
       announcementsCount: totalAnnouncements,
     },
-    source: 'google_api',
+    source,
   };
+}
+
+/**
+ * Conecta via Web App pessoal do Google Apps Script (https://script.google.com/macros/s/.../exec)
+ * que lê diretamente Classroom.Courses, Teachers, CourseWork, Submissions, Materials e Announcements.
+ */
+export async function fetchGoogleAppsScriptClassroom(webAppUrl: string): Promise<ClassroomSyncResult> {
+  const cleanUrl = webAppUrl.trim();
+  if (!cleanUrl.startsWith('https://script.google.com/')) {
+    throw new Error('Informe uma URL válida do Google Apps Script começando com https://script.google.com/macros/s/...');
+  }
+
+  const res = await fetch(cleanUrl, { method: 'GET', redirect: 'follow' });
+  if (!res.ok) {
+    throw new Error(`Erro HTTP ${res.status} ao consultar o Conector Apps Script. Verifique se a implantação está ativa para "Qualquer pessoa".`);
+  }
+
+  const json = await res.json().catch(() => null);
+  const bundles: RawCourseBundle[] = Array.isArray(json?.courses) ? json.courses : Array.isArray(json) ? json : [];
+  if (bundles.length === 0) {
+    throw new Error('O Conector Apps Script respondeu sem turmas. Confira se a conta logada no Apps Script possui turmas ativas no Google Classroom.');
+  }
+
+  return buildSyncResultFromCourseBundles(bundles, 'apps_script');
+}
+
+/**
+ * Conecta diretamente na API REST oficial do Google Classroom (v1) usando um OAuth2 Access Token
+ * e importa TODOS os cursos, professores, tópicos, materiais, avisos do mural, atividades, notas e entregas.
+ */
+export async function fetchGoogleClassroomFullData(accessToken: string): Promise<ClassroomSyncResult> {
+  const cleanToken = accessToken.trim().replace(/^Bearer\s+/i, '');
+  if (!cleanToken || cleanToken.length < 25 || !cleanToken.startsWith('ya29.')) {
+    throw new Error(
+      'Isso não é um Token OAuth 2.0 válido (Access Token sempre começa com "ya29."). Não digite sua senha de e-mail — use o OAuth Playground (Step 2) ou a aba "Conector Apps Script" / "Colar do Classroom".'
+    );
+  }
+
+  const headers = {
+    Authorization: `Bearer ${cleanToken}`,
+    Accept: 'application/json',
+  };
+
+  const coursesRes = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE&pageSize=30', {
+    headers,
+  });
+
+  if (!coursesRes.ok) {
+    const errBody = await coursesRes.json().catch(() => ({}));
+    const msg =
+      errBody?.error?.message ||
+      `Erro HTTP ${coursesRes.status} ao acessar Google Classroom API. Verifique se o token possui os escopos do Classroom.`;
+    throw new Error(msg);
+  }
+
+  const coursesData = await coursesRes.json();
+  const courses: any[] = Array.isArray(coursesData.courses) ? coursesData.courses : [];
+
+  if (courses.length === 0) {
+    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
+  }
+
+  const bundles: RawCourseBundle[] = await Promise.all(
+    courses.map(async (course) => {
+      const courseId = String(course.id);
+      const [teachersRes, topicsRes, courseWorkRes, submissionsRes, materialsRes, announcementsRes] =
+        await Promise.all([
+          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/teachers`, { headers }).catch(() => null),
+          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/topics`, { headers }).catch(() => null),
+          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=100`, { headers }).catch(() => null),
+          fetch(
+            `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me&pageSize=100`,
+            { headers }
+          ).catch(() => null),
+          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?pageSize=50`, {
+            headers,
+          }).catch(() => null),
+          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/announcements?pageSize=20`, { headers }).catch(
+            () => null
+          ),
+        ]);
+
+      const teachersJson = teachersRes && teachersRes.ok ? await teachersRes.json().catch(() => ({})) : {};
+      const topicsJson = topicsRes && topicsRes.ok ? await topicsRes.json().catch(() => ({})) : {};
+      const courseWorkJson = courseWorkRes && courseWorkRes.ok ? await courseWorkRes.json().catch(() => ({})) : {};
+      const submissionsJson = submissionsRes && submissionsRes.ok ? await submissionsRes.json().catch(() => ({})) : {};
+      const materialsJson = materialsRes && materialsRes.ok ? await materialsRes.json().catch(() => ({})) : {};
+      const announcementsJson =
+        announcementsRes && announcementsRes.ok ? await announcementsRes.json().catch(() => ({})) : {};
+
+      return {
+        course,
+        teachers: Array.isArray(teachersJson.teachers) ? teachersJson.teachers : [],
+        topics: Array.isArray(topicsJson.topic) ? topicsJson.topic : [],
+        courseWork: Array.isArray(courseWorkJson.courseWork) ? courseWorkJson.courseWork : [],
+        submissions: Array.isArray(submissionsJson.studentSubmissions) ? submissionsJson.studentSubmissions : [],
+        materials: Array.isArray(materialsJson.courseWorkMaterial) ? materialsJson.courseWorkMaterial : [],
+        announcements: Array.isArray(announcementsJson.announcements) ? announcementsJson.announcements : [],
+      };
+    })
+  );
+
+  return buildSyncResultFromCourseBundles(bundles, 'google_api');
 }
 
 /**
@@ -441,10 +520,14 @@ export function parseClassroomPastedContent(
 
   const baseSync = buildFullClassroomImpactaSync(existingSubjects);
 
-  // Caso 1: JSON do Google Takeout ou exportação estruturada
+  // Caso 1: JSON do Conector Apps Script, Google Takeout ou exportação estruturada
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       const parsed = JSON.parse(trimmed);
+      // Suporte direto ao JSON completo gerado pelo Conector Google Apps Script
+      if (Array.isArray(parsed?.courses) && parsed.courses[0]?.course) {
+        return buildSyncResultFromCourseBundles(parsed.courses, 'apps_script');
+      }
       const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || parsed.courses || [];
       if (Array.isArray(list) && list.length > 0) {
         const importedTasks: Task[] = list.map((item: any, idx: number) => {
@@ -490,11 +573,14 @@ export function parseClassroomPastedContent(
     }
   }
 
-  // Caso 2: Texto copiado direto da tela do Google Classroom
+  // Caso 2: Texto copiado direto da tela do Google Classroom (Ctrl+A -> Ctrl+C)
+  const NOISE_LINE_REGEX =
+    /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|\d{1,2}:\d{2})$/i;
+
   const lines = trimmed
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l.length > 2);
+    .filter((l) => l.length > 2 && !/^[A-ZÀ-Ú]$/.test(l));
 
   const extractedTasks: Task[] = [];
   let currentSubject = existingSubjects[0] || INITIAL_SUBJECTS[0];
@@ -503,12 +589,20 @@ export function parseClassroomPastedContent(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (/^(conclu[ií]da|entregue|devolvida)/i.test(line)) {
-      currentStatus = 'completed';
+    if (/^(conclu[ií]da|entregue|devolvida|nota\b)/i.test(line)) {
+      if (extractedTasks.length > 0 && /entregue|devolvida/i.test(line)) {
+        extractedTasks[extractedTasks.length - 1].status = 'completed';
+      } else {
+        currentStatus = 'completed';
+      }
       continue;
     }
-    if (/^(atribu[ií]do|pendente|a fazer)/i.test(line)) {
-      currentStatus = 'todo';
+    if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso)/i.test(line)) {
+      if (extractedTasks.length > 0 && /com atraso|pendente/i.test(line)) {
+        extractedTasks[extractedTasks.length - 1].priority = 'alta';
+      } else {
+        currentStatus = 'todo';
+      }
       continue;
     }
 
@@ -518,40 +612,61 @@ export function parseClassroomPastedContent(
         line.toLowerCase().includes(s.name.toLowerCase()) ||
         (s.code && line.toLowerCase().includes(s.code.toLowerCase()))
     );
-    if (matchedSub && line.length <= matchedSub.name.length + 15) {
+    if (matchedSub && line.length <= matchedSub.name.length + 20) {
+      // Se acabou de criar uma tarefa e a linha seguinte é a disciplina, reatribui à tarefa anterior
+      if (extractedTasks.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
+        const lastTask = extractedTasks[extractedTasks.length - 1];
+        if (lastTask.subjectId !== matchedSub.id) {
+          lastTask.subjectId = matchedSub.id;
+          lastTask.subjectName = matchedSub.name;
+          lastTask.description = `Importado diretamente do Google Classroom (${matchedSub.name}).`;
+        }
+      }
       currentSubject = matchedSub;
       continue;
     }
 
-    // Ignora cabeçalhos genéricos do Google Classroom
-    if (
-      /^(sem data|esta semana|pr[oó]xima semana|mais tarde|ver tudo|google classroom|turmas|agenda|para fazer)$/i.test(
-        line
-      )
-    ) {
+    if (NOISE_LINE_REGEX.test(line)) {
       continue;
     }
 
-    // Verifica se a próxima linha é apenas uma data ou nome de disciplina
-    let dueDate = parsePortugueseDate(line) || '2026-11-23';
+    // Se a linha é apenas uma data solta pertencente ao card anterior
+    const onlyDate = parsePortugueseDate(line);
+    if (onlyDate && line.length < 32 && extractedTasks.length > 0) {
+      extractedTasks[extractedTasks.length - 1].dueDate = onlyDate;
+      continue;
+    }
+
+    let dueDate = onlyDate || '2026-11-23';
     if (i + 1 < lines.length) {
       const nextDate = parsePortugueseDate(lines[i + 1]);
-      if (nextDate && lines[i + 1].length < 25) {
+      if (nextDate && lines[i + 1].length < 32) {
         dueDate = nextDate;
         i++;
       }
     }
 
-    const inferred = inferTaskType(line);
+    const cleanTitle = line
+      .replace(/data de entrega:?\s*/i, '')
+      .replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, '')
+      .trim()
+      .slice(0, 110);
+
+    if (!cleanTitle || cleanTitle.length < 3) continue;
+
+    const inferred = inferTaskType(cleanTitle);
     extractedTasks.push({
       id: `classroom-paste-${Date.now()}-${i}`,
-      title: line.replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, '').trim().slice(0, 110) || line.slice(0, 110),
+      title: cleanTitle,
       subjectId: currentSubject.id,
       subjectName: currentSubject.name,
       dueDate,
       dueTime: '23:59',
       priority: inferred.priority,
-      status: line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu') ? 'completed' : currentStatus,
+      status:
+        line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu')
+          ? 'completed'
+          : currentStatus,
       type: inferred.type,
       isCriticalMvp: inferred.isCriticalMvp,
       description: `Importado diretamente do Google Classroom (${currentSubject.name}).`,
@@ -559,7 +674,13 @@ export function parseClassroomPastedContent(
     });
   }
 
-  const finalTasks = replaceExisting && extractedTasks.length > 0 ? extractedTasks : [...extractedTasks, ...baseSync.tasks];
+  if (extractedTasks.length === 0) {
+    throw new Error(
+      'Nenhuma atividade pôde ser identificada no texto colado. Copie a lista de atividades da aba "Atividades" ou "Pendentes" do Google Classroom (Ctrl+A e Ctrl+C) ou use o Conector Apps Script.'
+    );
+  }
+
+  const finalTasks = replaceExisting ? extractedTasks : [...extractedTasks, ...baseSync.tasks];
 
   return {
     subjects: baseSync.subjects,

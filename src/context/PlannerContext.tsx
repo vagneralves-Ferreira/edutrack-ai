@@ -50,9 +50,9 @@ interface PlannerContextType {
 const PlannerContext = createContext<PlannerContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  SUBJECTS: 'edutrack_subjects_v5',
-  SUBJECTS_LEGACY: 'edutrack_subjects_v4',
-  TASKS: 'edutrack_tasks_v5',
+  SUBJECTS: 'edutrack_subjects_v6',
+  SUBJECTS_LEGACY: 'edutrack_subjects_v5',
+  TASKS: 'edutrack_tasks_v6',
   STUDENT_NAME: 'edutrack_student_name_v1',
 };
 
@@ -164,12 +164,19 @@ function normalizeSubject(raw: any): Subject {
       s.name.toLowerCase() === String(raw.name || raw.nome || '').toLowerCase()
   );
 
-  const profArray =
+  const rawProfs =
     Array.isArray(raw.professors) && raw.professors.length > 0
-      ? raw.professors
+      ? raw.professors.map((p: string) =>
+          p.includes('Fábio e Mentores') ? 'Prof. Evandro' : p
+        )
       : raw.professor
-      ? [String(raw.professor)]
+      ? [String(raw.professor).includes('Fábio e Mentores') ? 'Prof. Evandro' : String(raw.professor)]
       : matchedInitial?.professors || ['Prof. Responsável'];
+
+  const profArray =
+    matchedInitial?.id === 'innovation-lab' && rawProfs.some((p: string) => p.includes('Fábio'))
+      ? ['Prof. Evandro']
+      : rawProfs;
 
   return {
     id: matchedInitial ? matchedInitial.id : String(raw.id || 'subj-' + Date.now()),

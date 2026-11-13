@@ -287,7 +287,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     id: 'innovation-lab',
     code: 'IMP-INN303',
     name: 'Innovation Lab: Advanced No/Low Code',
-    professors: ['Prof. Fábio e Mentores de Inovação'],
+    professors: ['Prof. Evandro'],
     progress: 50,
     totalHours: 60,
     completedHours: 30,
