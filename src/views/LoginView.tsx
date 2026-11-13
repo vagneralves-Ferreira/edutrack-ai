@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { supabase } from '../lib/supabase';
 import {
   Mail,
   Lock,
@@ -28,6 +29,7 @@ export const LoginView: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
@@ -40,6 +42,7 @@ export const LoginView: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     const trimmedEmail = email.trim();
 
@@ -94,13 +97,41 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
     setErrorMessage(null);
+    setSuccessMessage(null);
+
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail) {
-      localStorage.setItem('edutrack_recovery_email', cleanEmail);
+    if (!cleanEmail) {
+      setErrorMessage('Por favor, preencha o e-mail institucional para receber o link de recuperação de senha.');
+      return;
     }
-    navigate('/reset-password');
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setErrorMessage('Por favor, informe um endereço de e-mail institucional válido.');
+      return;
+    }
+
+    localStorage.setItem('edutrack_recovery_email', cleanEmail);
+    setLoading(true);
+
+    const baseOrigin = window.location.origin.startsWith('http')
+      ? window.location.origin
+      : 'https://edutrack-ai-mauve-eight.vercel.app';
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${baseOrigin}/reset-password`,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+    } else {
+      setSuccessMessage(
+        `Link de confirmação enviado para ${cleanEmail}! Verifique sua caixa de entrada (e a pasta de spam) para redefinir sua senha.`
+      );
+    }
   };
 
   return (
@@ -221,6 +252,13 @@ export const LoginView: React.FC = () => {
               <div className="flex items-start gap-2 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="flex items-start gap-2 bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{successMessage}</span>
               </div>
             )}
 
