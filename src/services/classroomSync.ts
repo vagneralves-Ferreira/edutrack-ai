@@ -1,4 +1,14 @@
-import type { Subject, Task, StudyMaterial, SubjectModule, Evaluation, Priority, TaskStatus, TaskType } from '../types';
+import type {
+  Subject,
+  Task,
+  StudyMaterial,
+  MaterialAttachment,
+  SubjectModule,
+  Evaluation,
+  Priority,
+  TaskStatus,
+  TaskType,
+} from '../types';
 import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 
 export interface ClassroomSyncResult {
@@ -227,20 +237,76 @@ export function buildSyncResultFromCourseBundles(
     }
 
     const materials: StudyMaterial[] = [];
+    const extractAttachments = (rawList: any[] | undefined, postUrl?: string) => {
+      const attachments: MaterialAttachment[] = [];
+      let detectedFormat = 'Material Classroom';
+
+      for (const item of rawList || []) {
+        const df = item?.driveFile?.driveFile;
+        if (df?.alternateLink) {
+          attachments.push({
+            title: String(df.title || 'Arquivo no Google Drive'),
+            url: String(df.alternateLink),
+            type: 'drive',
+          });
+          if (detectedFormat === 'Material Classroom') detectedFormat = 'Google Drive / PDF';
+        }
+        const yt = item?.youtubeVideo;
+        if (yt?.alternateLink) {
+          attachments.push({
+            title: String(yt.title || 'Vídeo no YouTube'),
+            url: String(yt.alternateLink),
+            type: 'youtube',
+          });
+          if (detectedFormat === 'Material Classroom') detectedFormat = 'Vídeo YouTube';
+        }
+        const lk = item?.link;
+        if (lk?.url) {
+          attachments.push({
+            title: String(lk.title || lk.url),
+            url: String(lk.url),
+            type: 'link',
+          });
+          if (detectedFormat === 'Material Classroom') detectedFormat = 'Link Externo';
+        }
+        const fm = item?.form;
+        if (fm?.formUrl) {
+          attachments.push({
+            title: String(fm.title || 'Formulário Google'),
+            url: String(fm.formUrl),
+            type: 'form',
+          });
+          if (detectedFormat === 'Material Classroom') detectedFormat = 'Formulário Google';
+        }
+      }
+
+      if (postUrl && !attachments.some((a) => a.url === postUrl)) {
+        attachments.push({
+          title: 'Abrir postagem original no Google Classroom',
+          url: String(postUrl),
+          type: 'classroom',
+        });
+      }
+
+      return {
+        url: attachments[0]?.url || (postUrl ? String(postUrl) : undefined),
+        attachments,
+        format: detectedFormat,
+      };
+    };
+
     for (const mat of bundle.materials || []) {
-      const attachment = mat.materials?.[0];
-      let format = 'Material Classroom';
-      if (attachment?.driveFile) format = 'Google Drive / PDF';
-      else if (attachment?.youtubeVideo) format = 'Vídeo YouTube';
-      else if (attachment?.link) format = 'Link Externo';
+      const extracted = extractAttachments(mat.materials, mat.alternateLink);
 
       materials.push({
         id: `mat-${courseId}-${mat.id}`,
         title: String(mat.title || 'Material de Aula'),
         category: 'apostila',
-        format,
+        format: extracted.format,
         description: String(mat.description || `Publicado na turma ${courseName} no Google Classroom.`),
         badge: 'Classroom',
+        url: extracted.url,
+        attachments: extracted.attachments,
       });
       totalMaterials++;
     }
@@ -248,6 +314,7 @@ export function buildSyncResultFromCourseBundles(
     for (const ann of (bundle.announcements || []).slice(0, 8)) {
       const cleanText = String(ann.text || '').trim();
       if (!cleanText) continue;
+      const extracted = extractAttachments(ann.materials, ann.alternateLink);
       materials.push({
         id: `ann-${courseId}-${ann.id}`,
         title: `Aviso do Mural: ${cleanText.slice(0, 58)}${cleanText.length > 58 ? '...' : ''}`,
@@ -255,6 +322,8 @@ export function buildSyncResultFromCourseBundles(
         format: 'Mural do Professor',
         description: cleanText,
         badge: 'Mural Classroom',
+        url: extracted.url,
+        attachments: extracted.attachments,
       });
       totalAnnouncements++;
     }

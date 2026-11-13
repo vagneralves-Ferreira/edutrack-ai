@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar } from 'lucide-react';
+import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
 import { AiDica } from '../components/AiDica';
 import { formatDateBR } from '../utils/helpers';
+import type { StudyMaterial } from '../types';
 
 export const SubjectsView: React.FC = () => {
   const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus } = usePlanner();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterial | null>(null);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newProf, setNewProf] = useState('');
@@ -278,19 +280,31 @@ export const SubjectsView: React.FC = () => {
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {activeSubject.materials.map((mat) => (
-                      <div
+                      <button
+                        type="button"
                         key={mat.id}
-                        className="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] space-y-1"
+                        onClick={() => setSelectedMaterial(mat)}
+                        className="text-left p-3.5 rounded-xl bg-white/[0.025] hover:bg-cyan-500/[0.07] border border-white/[0.06] hover:border-cyan-400/35 space-y-1.5 transition-all cursor-pointer group"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300">
                             {mat.badge || mat.format}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">{mat.format}</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 group-hover:text-cyan-300 font-mono">
+                            {mat.attachments && mat.attachments.length > 0 ? (
+                              <>
+                                <Paperclip className="w-3 h-3" />
+                                <span>{mat.attachments.length} anexo{mat.attachments.length > 1 ? 's' : ''}</span>
+                              </>
+                            ) : (
+                              <span>{mat.format}</span>
+                            )}
+                            <ExternalLink className="w-3 h-3 opacity-70 group-hover:opacity-100" />
+                          </span>
                         </div>
-                        <p className="text-xs font-bold text-white">{mat.title}</p>
+                        <p className="text-xs font-bold text-white group-hover:text-cyan-200 transition-colors">{mat.title}</p>
                         <p className="text-[11px] text-slate-400 line-clamp-2">{mat.description}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -359,6 +373,102 @@ export const SubjectsView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {selectedMaterial && (
+        <div
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in"
+          onClick={() => setSelectedMaterial(null)}
+        >
+          <div
+            className="bento-card rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-white/[0.1]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 sm:p-6 border-b border-white/[0.07] flex items-start justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    {selectedMaterial.badge || selectedMaterial.format}
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">{selectedMaterial.format}</span>
+                  {activeSubject && (
+                    <span className="text-[11px] text-slate-500">• {activeSubject.name}</span>
+                  )}
+                </div>
+                <h3 className="text-base sm:text-lg font-extrabold text-white leading-snug">
+                  {selectedMaterial.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMaterial(null)}
+                className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
+                  {selectedMaterial.description}
+                </p>
+              </div>
+
+              {selectedMaterial.attachments && selectedMaterial.attachments.length > 0 ? (
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    <span>Arquivos & Links para Estudo ({selectedMaterial.attachments.length})</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedMaterial.attachments.map((att, idx) => (
+                      <a
+                        key={`${att.url}-${idx}`}
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-xs text-white transition-all group"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-cyan-100 group-hover:text-white truncate">{att.title}</p>
+                          <p className="text-[11px] text-cyan-300/75 truncate font-mono mt-0.5">{att.url}</p>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold text-[11px] shrink-0">
+                          <span>Abrir</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : selectedMaterial.url ? (
+                <a
+                  href={selectedMaterial.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all"
+                >
+                  <span>Abrir Material para Estudo</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-center justify-between gap-3">
+                  <span>Este item não possui link direto anexado ainda. Você pode reimportar o JSON do Classroom ou abrir o Classroom da turma.</span>
+                  <a
+                    href="https://classroom.google.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 font-bold text-[11px] shrink-0 inline-flex items-center gap-1"
+                  >
+                    <span>Classroom</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

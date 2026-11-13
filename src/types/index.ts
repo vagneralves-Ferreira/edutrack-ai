@@ -11,6 +11,12 @@ export interface Evaluation {
   grade?: number;
 }
 
+export interface MaterialAttachment {
+  title: string;
+  url: string;
+  type: 'drive' | 'youtube' | 'link' | 'form' | 'classroom';
+}
+
 export interface StudyMaterial {
   id: string;
   title: string;
@@ -18,6 +24,8 @@ export interface StudyMaterial {
   format: string; // 'PDF' | 'Livro / Referência' | 'Repositório GitHub' | 'Guia Rápido'
   description: string;
   badge: string;
+  url?: string;
+  attachments?: MaterialAttachment[];
 }
 
 export interface SubjectModule {
