@@ -75,17 +75,36 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
     setLoading(true);
 
     try {
-      // Tenta atualizar na sessão do Supabase caso o token do link não tenha sido pré-consumido pelo filtro de e-mail
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session) {
-        await supabase.auth.updateUser({ password }).catch(() => {});
-        await supabase.auth.signOut().catch(() => {});
-      }
+      const previousKnownPassword =
+        localStorage.getItem(`edutrack_supabase_pwd_${targetEmail}`) ||
+        localStorage.getItem(`edutrack_pwd_${targetEmail}`);
 
-      // Persiste a nova senha escolhida para garantir o acesso imediato na tela de login
+      // Persiste imediatamente a nova senha escolhida e invalida a antiga
       localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
       localStorage.setItem('edutrack_recovery_email', targetEmail);
       localStorage.removeItem('edutrack_active_user');
+
+      // Tenta atualizar também no Supabase Auth (via sessão ativa ou autenticando silenciosamente com a senha anterior conhecida)
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session) {
+        const { error: updateErr } = await supabase.auth.updateUser({ password });
+        if (!updateErr) {
+          localStorage.setItem(`edutrack_supabase_pwd_${targetEmail}`, password);
+        }
+        await supabase.auth.signOut().catch(() => {});
+      } else if (previousKnownPassword && previousKnownPassword !== password) {
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: targetEmail,
+          password: previousKnownPassword,
+        });
+        if (!signInErr && signInData?.session) {
+          const { error: updateErr } = await supabase.auth.updateUser({ password });
+          if (!updateErr) {
+            localStorage.setItem(`edutrack_supabase_pwd_${targetEmail}`, password);
+          }
+          await supabase.auth.signOut().catch(() => {});
+        }
+      }
 
       setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);

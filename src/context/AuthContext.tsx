@@ -117,26 +117,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Verifica primeiro se o usuário redefiniu a senha pelo fluxo de recuperação
     const savedResetPassword = localStorage.getItem(`edutrack_pwd_${cleanEmail}`);
     if (savedResetPassword) {
-      if (savedResetPassword === password) {
-        const recoveredUser = {
-          id: `user-${cleanEmail}`,
-          aud: 'authenticated',
-          role: 'authenticated',
-          email: cleanEmail,
-          app_metadata: {},
-          user_metadata: { name: cleanEmail.split('@')[0] },
-          created_at: new Date().toISOString(),
-        } as User;
+      if (savedResetPassword !== password) {
+        return { success: false, error: 'E-mail ou senha inválidos. Verifique os dados informados.' };
+      }
 
-        localStorage.setItem('edutrack_active_user', JSON.stringify(recoveredUser));
-        setUser(recoveredUser);
+      // Tenta autenticar também no Supabase caso a senha já tenha sido sincronizada lá
+      const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+      if (!supaError && supaData?.user) {
+        localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
+        localStorage.setItem('edutrack_active_user', JSON.stringify(supaData.user));
+        setUser(supaData.user);
+        if (supaData.session) setSession(supaData.session);
         return { success: true };
       }
+
+      const recoveredUser = {
+        id: `user-${cleanEmail}`,
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: cleanEmail,
+        app_metadata: {},
+        user_metadata: { name: cleanEmail.split('@')[0] },
+        created_at: new Date().toISOString(),
+      } as User;
+
+      localStorage.setItem('edutrack_active_user', JSON.stringify(recoveredUser));
+      setUser(recoveredUser);
+      return { success: true };
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (!error && data?.user) {
       localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
+      localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
       localStorage.setItem('edutrack_active_user', JSON.stringify(data.user));
       setUser(data.user);
       if (data.session) setSession(data.session);
@@ -155,8 +171,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const cleanEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
     if (error) return { success: false, error: error.message };
+    localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
+    localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
     return { success: true, data };
   };
 
