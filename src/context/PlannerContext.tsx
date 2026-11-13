@@ -611,7 +611,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
               carga_horaria_total: subj.totalHours,
             },
             { onConflict: 'codigo' }
-          ).catch(() => {});
+          );
         }
       }
 
@@ -627,7 +627,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             status: clsTask.status,
             prioridade: clsTask.priority,
             importado_classroom: true,
-          }).catch(() => {});
+          });
         }
       }
     } catch (e) {
