@@ -5,6 +5,17 @@ import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import confetti from 'canvas-confetti';
+import { buildFullClassroomImpactaSync, type ClassroomSyncResult } from '../services/classroomSync';
+
+export interface ClassroomSyncMetadata {
+  timestamp: string;
+  coursesCount: number;
+  tasksCount: number;
+  materialsCount: number;
+  evaluationsCount: number;
+  announcementsCount: number;
+  source: string;
+}
 
 export interface NewSubjectInput {
   code: string;
@@ -24,6 +35,10 @@ interface PlannerContextType {
   addSubject: (subjectData: NewSubjectInput) => Subject;
   addTask: (task: Omit<Task, 'id'>) => void;
   importClassroomTasks: () => number;
+  applyClassroomSyncResult: (result: ClassroomSyncResult) => Promise<void>;
+  isClassroomModalOpen: boolean;
+  setIsClassroomModalOpen: (open: boolean) => void;
+  lastClassroomSync: ClassroomSyncMetadata | null;
   updateTaskStatus: (id: string, status: TaskStatus) => void;
   deleteTask: (id: string) => void;
   logStudyTime: (subjectId: string, minutes: number) => void;
@@ -247,6 +262,15 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [subjects, setSubjects] = useState<Subject[]>(() => loadSubjectsFromStorage());
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(() => subjects[0] || null);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState<boolean>(false);
+  const [isClassroomModalOpen, setIsClassroomModalOpen] = useState<boolean>(false);
+  const [lastClassroomSync, setLastClassroomSync] = useState<ClassroomSyncMetadata | null>(() => {
+    try {
+      const saved = localStorage.getItem('edutrack_classroom_sync_meta');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [studentNameState, setStudentNameState] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEYS.STUDENT_NAME) || 'Alexandre (Impacta)';
   });
@@ -533,48 +557,88 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     })();
   };
 
-  const importClassroomTasks = (): number => {
-    setTasks((prev) => {
-      const customTasks = prev.filter(
-        (t) => !LEGACY_TASK_IDS.has(t.id) && !CLASSROOM_MOCK_TASKS.some((mock) => mock.id === t.id)
-      );
+  const applyClassroomSyncResult = async (result: ClassroomSyncResult): Promise<void> => {
+    // 1. Atualiza todas as disciplinas (com materiais, módulos, professores, avaliações e progresso)
+    setSubjects(result.subjects);
+    persistSubjectsToStorage(result.subjects);
+    if (result.subjects.length > 0) {
+      setSelectedSubject((prev) => {
+        if (!prev) return result.subjects[0];
+        return result.subjects.find((s) => s.id === prev.id) || result.subjects[0];
+      });
+    }
 
-      const updated = [...CLASSROOM_MOCK_TASKS, ...customTasks];
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updated));
-      return updated;
+    // 2. Atualiza todas as tarefas mantendo tarefas manuais do aluno
+    setTasks((prev) => {
+      const manualTasks = prev.filter((t) => !t.importedFromClassroom && !LEGACY_TASK_IDS.has(t.id));
+      const merged = [...result.tasks, ...manualTasks];
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(merged));
+      return merged;
     });
+
+    // 3. Salva metadados da sincronização
+    const meta: ClassroomSyncMetadata = {
+      timestamp: new Date().toLocaleString('pt-BR'),
+      coursesCount: result.stats.coursesCount,
+      tasksCount: result.stats.tasksCount,
+      materialsCount: result.stats.materialsCount,
+      evaluationsCount: result.stats.evaluationsCount,
+      announcementsCount: result.stats.announcementsCount,
+      source: result.source,
+    };
+    setLastClassroomSync(meta);
+    localStorage.setItem('edutrack_classroom_sync_meta', JSON.stringify(meta));
 
     confetti({
-      particleCount: 60,
-      spread: 65,
+      particleCount: 80,
+      spread: 70,
       origin: { y: 0.65 },
-      colors: ['#34a853', '#4285f4', '#fbbc05', '#f59e0b'],
+      colors: ['#34a853', '#4285f4', '#fbbc05', '#8b5cf6'],
     });
 
-    // Sincroniza tarefas importadas do Classroom com o Supabase
-    (async () => {
-      try {
-        for (const mockTask of CLASSROOM_MOCK_TASKS) {
-          const ids = await resolveSupabaseIds(mockTask.subjectId, mockTask.subjectName);
-          if (ids) {
-            await supabase.from('tasks').insert({
-              subject_id: ids.subjectUuid,
-              user_id: ids.userId,
-              titulo: mockTask.title,
-              descricao: mockTask.description || '',
-              data_entrega: mockTask.dueDate ? new Date(mockTask.dueDate).toISOString() : null,
-              status: mockTask.status,
-              prioridade: mockTask.priority,
-              importado_classroom: true,
-            });
-          }
+    // 4. Sincroniza disciplinas e tarefas com o Supabase
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
+      if (userId) {
+        for (const subj of result.subjects) {
+          await supabase.from('subjects').upsert(
+            {
+              user_id: userId,
+              codigo: subj.code,
+              nome: subj.name,
+              professor: subj.professors.join(', '),
+              carga_horaria_total: subj.totalHours,
+            },
+            { onConflict: 'codigo' }
+          ).catch(() => {});
         }
-      } catch (e) {
-        console.warn('Erro ao sincronizar Classroom com Supabase:', e);
       }
-    })();
 
-    return CLASSROOM_MOCK_TASKS.length;
+      for (const clsTask of result.tasks) {
+        const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
+        if (ids) {
+          await supabase.from('tasks').insert({
+            subject_id: ids.subjectUuid,
+            user_id: ids.userId,
+            titulo: clsTask.title,
+            descricao: clsTask.description || '',
+            data_entrega: clsTask.dueDate ? new Date(clsTask.dueDate).toISOString() : null,
+            status: clsTask.status,
+            prioridade: clsTask.priority,
+            importado_classroom: true,
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao sincronizar pacote completo do Classroom com Supabase:', e);
+    }
+  };
+
+  const importClassroomTasks = (): number => {
+    const fullResult = buildFullClassroomImpactaSync(subjects);
+    void applyClassroomSyncResult(fullResult);
+    return fullResult.tasks.length;
   };
 
   const updateTaskStatus = (id: string, status: TaskStatus) => {
@@ -675,6 +739,10 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addSubject,
         addTask,
         importClassroomTasks,
+        applyClassroomSyncResult,
+        isClassroomModalOpen,
+        setIsClassroomModalOpen,
+        lastClassroomSync,
         updateTaskStatus,
         deleteTask,
         logStudyTime,

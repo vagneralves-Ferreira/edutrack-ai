@@ -19,7 +19,7 @@ import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } fr
 import { AiDica } from '../components/AiDica';
 
 export const TasksView: React.FC = () => {
-  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, importClassroomTasks } = usePlanner();
+  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -28,27 +28,13 @@ export const TasksView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [onlyMvp, setOnlyMvp] = useState<boolean>(false);
 
-  // Google Classroom Sync Mockup States
-  const [isSyncingClassroom, setIsSyncingClassroom] = useState(false);
-  const [syncStepMessage, setSyncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
-  const [syncSuccessBanner, setSyncSuccessBanner] = useState<string | null>(null);
+  // Google Classroom Sync Modal Trigger
+  const [isSyncingClassroom] = useState(false);
+  const [syncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
+  const [syncSuccessBanner] = useState<string | null>(null);
 
   const handleSyncClassroom = () => {
-    if (isSyncingClassroom) return;
-    setSyncSuccessBanner(null);
-    setIsSyncingClassroom(true);
-    setSyncStepMessage('Autenticando via Google Workspace da Impacta...');
-
-    setTimeout(() => {
-      setSyncStepMessage('Importando turmas e atividades pendentes do Google Classroom...');
-    }, 1000);
-
-    setTimeout(() => {
-      const count = importClassroomTasks();
-      setIsSyncingClassroom(false);
-      setSyncSuccessBanner(`${count} atividades acadêmicas sincronizadas do Google Classroom!`);
-      setTimeout(() => setSyncSuccessBanner(null), 5000);
-    }, 2100);
+    setIsClassroomModalOpen(true);
   };
 
   // Filter tasks

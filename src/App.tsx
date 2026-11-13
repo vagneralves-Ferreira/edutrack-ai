@@ -15,6 +15,7 @@ import { TasksView } from './views/TasksView';
 import { TimerView } from './views/TimerView';
 import { AiAssistantView } from './views/AiAssistantView';
 import { NewTaskModal } from './components/tasks/NewTaskModal';
+import { ClassroomSyncModal } from './components/classroom/ClassroomSyncModal';
 import { supabase } from './lib/supabase';
 import { Layers } from 'lucide-react';
 
@@ -143,8 +144,9 @@ const MainLayout: React.FC = () => {
         </div>
       </main>
 
-      {/* New Task Modal (accessible globally) */}
+      {/* New Task & Classroom Sync Modals (accessible globally) */}
       <NewTaskModal />
+      <ClassroomSyncModal />
     </div>
   );
 };

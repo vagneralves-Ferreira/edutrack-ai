@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  BookMarked
 } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
@@ -34,7 +35,7 @@ function formatShortTime(date = new Date()): string {
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
-  const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen } = usePlanner();
+  const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
   const { currentUser, logout } = useAuth();
   const { isActive: isTimerActive, formattedTime } = useTimer();
   const { theme, toggleTheme } = useTheme();
@@ -146,6 +147,16 @@ export const Header: React.FC = () => {
 
         {/* Right: Actions, Theme Toggle, Clock, Notifications, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Google Classroom Sync Hub Button */}
+          <button
+            onClick={() => setIsClassroomModalOpen(true)}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+            title="Vincular e sincronizar todas as informações do Google Classroom"
+          >
+            <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Classroom</span>
+          </button>
+
           {/* Quick New Task Button */}
           <button
             onClick={() => setIsNewTaskModalOpen(true)}
