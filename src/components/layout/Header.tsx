@@ -207,28 +207,33 @@ export const Header: React.FC = () => {
             {showNotifications && (
               <div className="bento-card absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Radar de Avaliações</h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold">{criticalTasks.length} críticos</span>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Pendentes no Classroom</h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold">
+                    {pendingTasksCount} pendentes
+                  </span>
                 </div>
                 <div className="py-2.5 space-y-2 max-h-64 overflow-y-auto">
-                  <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/25 text-xs">
-                    <div className="flex items-center gap-1.5 text-violet-300 font-semibold mb-1">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>08/09: Avaliações Parciais</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Software Engineering (Prof. Fábio Nogueira) e Avaliação Parcial MVP de Innovation Lab.
-                    </p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-xs">
-                    <div className="flex items-center gap-1.5 text-cyan-300 font-semibold mb-1">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>10/09: Prova & Modelo 3FN</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      SQL Fundamentals (Prof. Evandro) e Database Design.
-                    </p>
-                  </div>
+                  {tasks
+                    .filter((t) => t.status !== 'completed')
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/25 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-1.5 text-violet-300 font-semibold mb-1">
+                          <span className="flex items-center gap-1.5 truncate">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{t.title}</span>
+                          </span>
+                          <span className="font-mono text-[10px] text-cyan-300 shrink-0">
+                            {t.dueDate.split('-').reverse().slice(0, 2).join('/')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          {t.subjectName} • {t.description}
+                        </p>
+                      </div>
+                    ))}
                 </div>
                 <button
                   onClick={() => { setShowNotifications(false); setActiveTab('tarefas'); }}

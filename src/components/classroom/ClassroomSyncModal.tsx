@@ -47,6 +47,7 @@ export const ClassroomSyncModal: React.FC = () => {
     () => localStorage.getItem('edutrack_google_client_id') || ''
   );
   const [pastedText, setPastedText] = useState<string>('');
+  const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -166,7 +167,7 @@ export const ClassroomSyncModal: React.FC = () => {
     try {
       setIsLoading(true);
       setStepStatus('Analisando atividades, turmas e prazos informados...');
-      const result = parseClassroomPastedContent(pastedText, subjects);
+      const result = parseClassroomPastedContent(pastedText, subjects, replaceExisting);
       await applyClassroomSyncResult(result);
       setIsLoading(false);
       setPastedText('');
@@ -304,18 +305,18 @@ export const ClassroomSyncModal: React.FC = () => {
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
                     <BookOpen className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-white">Turmas & Professores</p>
+                      <p className="font-bold text-white">5 Disciplinas do Classroom</p>
                       <p className="text-slate-400 text-[11px] mt-0.5">
-                        SQL Fundamentals, Innovation Lab, Database Design e Software Engineering com progresso real.
+                        SQL Fundamentals, Programming & Algorithms, Database Design, Innovation Lab e Software Engineering.
                       </p>
                     </div>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
                     <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-white">10 Atividades & Entregas</p>
+                      <p className="font-bold text-white">6 Atividades Oficiais do Classroom</p>
                       <p className="text-slate-400 text-[11px] mt-0.5">
-                        Desafio da Procedure, Entrega Final do MVP, AP2, Modelo Cascata, UML, 3FN e Laboratórios SQL.
+                        Desafio da Procedure (07/11), Tarefas a serem realizadas (19/11), Entrega final do Projeto (23/11), Avaliação Parcial 02 (21/10), TA: Uso do Modelo Cascata (22/08) e Dinâmica Modelos de Desenvolvimento (02/09).
                       </p>
                     </div>
                   </div>
@@ -439,6 +440,15 @@ export const ClassroomSyncModal: React.FC = () => {
                   placeholder="Abra seu Google Classroom -> Atividades ou Pendentes -> copie (Ctrl+C) e cole (Ctrl+V) aqui..."
                   className="w-full bg-black/40 border border-white/[0.1] rounded-xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                 />
+                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={replaceExisting}
+                    onChange={(e) => setReplaceExisting(e.target.checked)}
+                    className="rounded border-white/20 bg-black/40 text-violet-500 focus:ring-violet-500"
+                  />
+                  <span>Substituir tarefas atuais do Classroom para corresponder exatamente ao texto colado</span>
+                </label>
                 <button
                   type="button"
                   disabled={isLoading}

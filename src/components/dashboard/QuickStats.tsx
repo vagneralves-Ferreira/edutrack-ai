@@ -14,8 +14,11 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
 
   const totalStudyHours = subjects.reduce((sum, s) => sum + s.studyTimeHours, 0);
   const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
-  const pendingCriticalCount = tasks.filter(t => (t.isCriticalMvp || (t.type === 'avaliacao' && t.priority === 'critica')) && t.status !== 'completed').length;
+  const pendingTasksCount = tasks.filter(t => t.status !== 'completed').length;
   const taskCompletionPercent = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
+  const topSubject = subjects.length > 0
+    ? [...subjects].sort((a, b) => b.studyTimeHours - a.studyTimeHours)[0]
+    : null;
 
   return (
     <div className="grid grid-cols-2 gap-3.5 h-full">
@@ -31,24 +34,24 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
         <div className="my-2">
           <span className="text-2xl sm:text-3xl font-black text-white font-mono">{totalStudyHours}h</span>
           <span className="block text-[10px] text-cyan-300 font-medium mt-0.5 truncate">
-            Líder: Programming & Alg.
+            Líder: {topSubject ? topSubject.name : 'SQL Fundamentals'}
           </span>
         </div>
       </div>
 
-      {/* Tile 2: Prazos Críticos */}
+      {/* Tile 2: Prazos Pendentes do Classroom */}
       <div className="bento-card-interactive rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden border-rose-500/25">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-rose-500 to-orange-500" />
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">Críticas / MVP</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">Pendentes Classroom</span>
           <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
             <Flame className="w-3.5 h-3.5" />
           </div>
         </div>
         <div className="my-2">
-          <span className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">{pendingCriticalCount}</span>
+          <span className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">{pendingTasksCount}</span>
           <span className="block text-[10px] text-rose-200/80 font-medium mt-0.5 truncate">
-            Provas 08/09 e 10/09
+            Prazos: 07/11, 19/11 e 23/11
           </span>
         </div>
       </div>

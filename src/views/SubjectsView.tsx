@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, X, User, Clock, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
 import { AiDica } from '../components/AiDica';
+import { formatDateBR } from '../utils/helpers';
 
 export const SubjectsView: React.FC = () => {
-  const { subjects, selectedSubject, setSelectedSubject, addSubject } = usePlanner();
+  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus } = usePlanner();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newProf, setNewProf] = useState('');
 
   const activeSubject = selectedSubject || subjects[0];
+  const subjectTasks = activeSubject
+    ? tasks.filter((t) => t.subjectId === activeSubject.id || t.subjectName.toLowerCase() === activeSubject.name.toLowerCase())
+    : [];
 
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,13 +54,23 @@ export const SubjectsView: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/15 transition-all cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Nova Disciplina</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setIsClassroomModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer shrink-0"
+          >
+            <BookMarked className="w-4 h-4 text-emerald-400" />
+            <span>Sincronizar Classroom</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/15 transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Nova Disciplina</span>
+          </button>
+        </div>
       </div>
 
       <AiDica
@@ -143,6 +157,139 @@ export const SubjectsView: React.FC = () => {
                       <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.025] border border-white/[0.05] text-xs text-slate-200">
                         <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <span className="truncate">{topic}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Atividades do Google Classroom vinculadas a esta disciplina */}
+              <div className="mt-6 pt-5 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <BookMarked className="w-3.5 h-3.5" />
+                    <span>Atividades do Google Classroom ({subjectTasks.length})</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-400">Sincronizado com Kanban</span>
+                </div>
+
+                {subjectTasks.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs text-slate-400">
+                    Nenhuma atividade pendente ou atribuída no Google Classroom para esta disciplina no momento.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {subjectTasks.map((task) => {
+                      const isDone = task.status === 'completed';
+                      const statusLabel =
+                        task.status === 'completed'
+                          ? 'Concluída'
+                          : task.status === 'in_progress'
+                          ? 'Em Andamento'
+                          : 'A Fazer';
+                      const statusColor =
+                        task.status === 'completed'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : task.status === 'in_progress'
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+
+                      return (
+                        <div
+                          key={task.id}
+                          className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${statusColor}`}>
+                                {statusLabel}
+                              </span>
+                              {task.importedFromClassroom && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300">
+                                  <BookMarked className="w-2.5 h-2.5" />
+                                  Classroom
+                                </span>
+                              )}
+                            </div>
+                            <h5 className={`text-xs sm:text-sm font-bold ${isDone ? 'line-through text-slate-400' : 'text-white'}`}>
+                              {task.title}
+                            </h5>
+                            <p className="text-xs text-slate-400 mt-0.5">{task.description}</p>
+                          </div>
+
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
+                            <span className="inline-flex items-center gap-1 text-xs font-mono text-cyan-300">
+                              <Calendar className="w-3 h-3" />
+                              {formatDateBR(task.dueDate)}
+                            </span>
+                            <button
+                              onClick={() => updateTaskStatus(task.id, isDone ? 'todo' : 'completed')}
+                              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 cursor-pointer"
+                            >
+                              {isDone ? 'Reabrir' : 'Marcar Concluída'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Avaliações e Materiais da Disciplina */}
+              {Array.isArray(activeSubject.evaluations) && activeSubject.evaluations.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-white/[0.06]">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 mb-3">
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>Avaliações & Entregas Registradas</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeSubject.evaluations.map((ev) => (
+                      <div
+                        key={ev.id}
+                        className="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-white truncate">{ev.name}</p>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            Data: {ev.date} • Peso: {ev.weight}%
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                            ev.status === 'completed'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : 'bg-amber-500/15 text-amber-300'
+                          }`}
+                        >
+                          {ev.status === 'completed' ? (ev.grade ? `Nota ${ev.grade}` : 'Entregue') : 'Pendente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {Array.isArray(activeSubject.materials) && activeSubject.materials.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-white/[0.06]">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5 mb-3">
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Materiais de Aula & Mural Classroom ({activeSubject.materials.length})</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeSubject.materials.map((mat) => (
+                      <div
+                        key={mat.id}
+                        className="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300">
+                            {mat.badge || mat.format}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">{mat.format}</span>
+                        </div>
+                        <p className="text-xs font-bold text-white">{mat.title}</p>
+                        <p className="text-[11px] text-slate-400 line-clamp-2">{mat.description}</p>
                       </div>
                     ))}
                   </div>

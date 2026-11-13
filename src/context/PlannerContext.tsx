@@ -50,9 +50,9 @@ interface PlannerContextType {
 const PlannerContext = createContext<PlannerContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  SUBJECTS: 'edutrack_subjects_v3',
-  SUBJECTS_LEGACY: 'edutrack_subjects',
-  TASKS: 'edutrack_tasks_v4',
+  SUBJECTS: 'edutrack_subjects_v5',
+  SUBJECTS_LEGACY: 'edutrack_subjects_v4',
+  TASKS: 'edutrack_tasks_v5',
   STUDENT_NAME: 'edutrack_student_name_v1',
 };
 
@@ -363,7 +363,50 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (dbTasks && dbTasks.length > 0) {
-          const mappedTasks: Task[] = dbTasks.map((row: any) => {
+          const EXTRA_REMOVED_TITLES = new Set([
+            'modelagem relacional e normalização 3fn',
+            'laboratório prático: consultas com inner/left join e agregações',
+            'especificação openspec & auditoria das tarefas 01 a 15',
+            'lista de exercícios: álgebra relacional e integridade referencial',
+          ]);
+
+          const seenTitles = new Set<string>();
+          const duplicateIdsToDelete: string[] = [];
+          const uniqueRows: any[] = [];
+
+          for (const row of dbTasks) {
+            const titleKey = String(row.titulo || '').trim().toLowerCase();
+            if (!titleKey || EXTRA_REMOVED_TITLES.has(titleKey)) {
+              if (row.id) duplicateIdsToDelete.push(String(row.id));
+              continue;
+            }
+            if (seenTitles.has(titleKey)) {
+              if (row.id) duplicateIdsToDelete.push(String(row.id));
+              continue;
+            }
+            seenTitles.add(titleKey);
+            uniqueRows.push(row);
+          }
+
+          if (duplicateIdsToDelete.length > 0) {
+            await supabase.from('tasks').delete().in('id', duplicateIdsToDelete);
+          }
+
+          const mappedTasks: Task[] = uniqueRows.map((row: any) => {
+            const rowTitleLower = String(row.titulo || '').trim().toLowerCase();
+            const matchedCanonicalTask = INITIAL_TASKS.find(
+              (t) => t.title.toLowerCase() === rowTitleLower
+            );
+
+            if (matchedCanonicalTask) {
+              return {
+                ...matchedCanonicalTask,
+                id: String(row.id || matchedCanonicalTask.id),
+                status: (row.status as TaskStatus) || matchedCanonicalTask.status,
+                importedFromClassroom: true,
+              };
+            }
+
             const dbSub = dbSubjects?.find((s: any) => s.id === row.subject_id);
             const matchedLocalSub =
               subjects.find(
@@ -394,7 +437,13 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
           });
 
-          setTasks(mappedTasks);
+          const missingCanonical = INITIAL_TASKS.filter(
+            (canon) => !mappedTasks.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
+          );
+
+          const finalTasks = [...mappedTasks, ...missingCanonical];
+          setTasks(finalTasks);
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(finalTasks));
         }
       } catch (err) {
         console.warn('Conexão com Supabase em modo fallback local:', err);
@@ -596,38 +645,54 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       colors: ['#34a853', '#4285f4', '#fbbc05', '#8b5cf6'],
     });
 
-    // 4. Sincroniza disciplinas e tarefas com o Supabase
+    // 4. Sincroniza disciplinas e tarefas com o Supabase sem duplicar
     try {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id;
       if (userId) {
+        const { data: existingSubs } = await supabase
+          .from('subjects')
+          .select('id, nome, codigo')
+          .eq('user_id', userId);
+
         for (const subj of result.subjects) {
-          await supabase.from('subjects').upsert(
-            {
+          const exists = (existingSubs || []).some(
+            (s: any) =>
+              String(s.nome || '').toLowerCase() === subj.name.toLowerCase() ||
+              String(s.codigo || '').toLowerCase() === subj.code.toLowerCase()
+          );
+          if (!exists) {
+            await supabase.from('subjects').insert({
               user_id: userId,
               codigo: subj.code,
               nome: subj.name,
               professor: subj.professors.join(', '),
               carga_horaria_total: subj.totalHours,
-            },
-            { onConflict: 'codigo' }
-          );
+            });
+          }
         }
-      }
 
-      for (const clsTask of result.tasks) {
-        const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
-        if (ids) {
-          await supabase.from('tasks').insert({
-            subject_id: ids.subjectUuid,
-            user_id: ids.userId,
-            titulo: clsTask.title,
-            descricao: clsTask.description || '',
-            data_entrega: clsTask.dueDate ? new Date(clsTask.dueDate).toISOString() : null,
-            status: clsTask.status,
-            prioridade: clsTask.priority,
-            importado_classroom: true,
-          });
+        // Remove tarefas anteriores importadas do Classroom para evitar duplicidade
+        await supabase
+          .from('tasks')
+          .delete()
+          .eq('user_id', userId)
+          .eq('importado_classroom', true);
+
+        for (const clsTask of result.tasks) {
+          const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
+          if (ids) {
+            await supabase.from('tasks').insert({
+              subject_id: ids.subjectUuid,
+              user_id: ids.userId,
+              titulo: clsTask.title,
+              descricao: clsTask.description || '',
+              data_entrega: clsTask.dueDate ? new Date(clsTask.dueDate).toISOString() : null,
+              status: clsTask.status,
+              prioridade: clsTask.priority,
+              importado_classroom: true,
+            });
+          }
         }
       }
     } catch (e) {

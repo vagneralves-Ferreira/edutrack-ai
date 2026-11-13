@@ -92,9 +92,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
       }
     ],
     evaluations: [
-      { id: 'ev-1', name: 'Quiz Prático DML', date: '25/08', weight: 15, status: 'completed', grade: 9.5 },
-      { id: 'ev-2', name: 'Avaliação Parcial (Consultas & Relatórios)', date: '10/09', weight: 35, status: 'pending' },
-      { id: 'ev-3', name: 'Projeto Final de Modelagem & Consultas', date: '24/11', weight: 50, status: 'pending' }
+      { id: 'ev-sql-1', name: 'Desafio da Procedure (Mural Prof. Evandro)', date: '07/11/2026', weight: 100, status: 'pending' }
     ]
   },
   {
@@ -188,9 +186,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
       }
     ],
     evaluations: [
-      { id: 'ev-7', name: 'Laboratório Prático de Algoritmos I', date: '21/08', weight: 20, status: 'completed', grade: 9.8 },
-      { id: 'ev-8', name: 'Avaliação Teórico-Prática de Ordenação', date: '15/09', weight: 40, status: 'pending' },
-      { id: 'ev-9', name: 'Projeto Integrador de Estruturas de Dados', date: '05/12', weight: 40, status: 'pending' }
+      { id: 'ev-alg-1', name: 'Atividades Práticas de Algoritmos (Classroom)', date: 'Semestre 2026.2', weight: 100, status: 'completed', grade: 9.8 }
     ]
   },
   {
@@ -284,9 +280,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
       }
     ],
     evaluations: [
-      { id: 'ev-10', name: 'Entrega do Modelo DER Conceitual', date: '29/08', weight: 20, status: 'completed', grade: 9.0 },
-      { id: 'ev-11', name: 'Avaliação Parcial (Esquema Lógico Normalizado)', date: '10/09', weight: 40, status: 'pending' },
-      { id: 'ev-12', name: 'Implementação Física & Benchmark', date: '18/11', weight: 40, status: 'pending' }
+      { id: 'ev-dbd-1', name: 'Modelagem Conceitual & Normalização 3FN (Classroom)', date: 'Semestre 2026.2', weight: 100, status: 'completed', grade: 9.0 }
     ]
   },
   {
@@ -294,9 +288,9 @@ export const INITIAL_SUBJECTS: Subject[] = [
     code: 'IMP-INN303',
     name: 'Innovation Lab: Advanced No/Low Code',
     professors: ['Prof. Fábio e Mentores de Inovação'],
-    progress: 90,
+    progress: 50,
     totalHours: 60,
-    completedHours: 54,
+    completedHours: 30,
     studyTimeHours: 14,
     color: '#f97316',
     accentColor: 'from-orange-500 to-rose-600',
@@ -380,9 +374,8 @@ export const INITIAL_SUBJECTS: Subject[] = [
       }
     ],
     evaluations: [
-      { id: 'ev-13', name: 'Wireframe & Protótipo Funcional', date: '22/08', weight: 20, status: 'completed', grade: 10.0 },
-      { id: 'ev-14', name: 'Avaliação Parcial MVP (Entrega Funcional em Produção)', date: '08/09', weight: 40, status: 'pending' },
-      { id: 'ev-15', name: 'Pitch Final para Banca Examinadora', date: '28/11', weight: 40, status: 'pending' }
+      { id: 'ev-inn-1', name: 'Tarefas a serem realizadas (Upload Markdown e Docs)', date: '19/11/2026', weight: 40, status: 'pending' },
+      { id: 'ev-inn-2', name: 'Entrega final do Projeto (MVP)', date: '23/11/2026', weight: 60, status: 'pending' }
     ]
   },
   {
@@ -390,9 +383,9 @@ export const INITIAL_SUBJECTS: Subject[] = [
     code: 'IMP-ENG201',
     name: 'Software Engineering',
     professors: ['Prof. Fábio Nogueira'],
-    progress: 65,
+    progress: 100,
     totalHours: 80,
-    completedHours: 52,
+    completedHours: 80,
     studyTimeHours: 24,
     color: '#f59e0b',
     accentColor: 'from-amber-500 to-orange-600',
@@ -476,9 +469,9 @@ export const INITIAL_SUBJECTS: Subject[] = [
       }
     ],
     evaluations: [
-      { id: 'ev-4', name: 'Documentação de Requisitos SRS', date: '28/08', weight: 20, status: 'completed', grade: 8.8 },
-      { id: 'ev-5', name: 'Avaliação Parcial (Arquitetura & Pitch Técnico)', date: '08/09', weight: 40, status: 'pending' },
-      { id: 'ev-6', name: 'Release Final do Produto & Deploy', date: '29/11', weight: 40, status: 'pending' }
+      { id: 'ev-eng-1', name: 'TA: Uso do Modelo Cascata', date: '22/08/2026', weight: 30, status: 'completed', grade: 9.5 },
+      { id: 'ev-eng-2', name: 'Dinâmica Modelos de Desenvolvimento (UML 2.5)', date: '02/09/2026', weight: 30, status: 'completed', grade: 10.0 },
+      { id: 'ev-eng-3', name: 'Avaliação Parcial 02', date: '21/10/2026', weight: 40, status: 'completed', grade: 9.2 }
     ]
   }
 ];

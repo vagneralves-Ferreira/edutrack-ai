@@ -155,7 +155,7 @@ export const TimerView: React.FC = () => {
       {/* Footer Info Card */}
       <div className="p-4 rounded-2xl bento-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <span className="text-slate-400">
-          Precisa revisar conteúdos para as Avaliações Parciais e o MVP de 08/09 ou 10/09?
+          Precisa focar no Desafio da Procedure (07/11), Tarefas (19/11) ou na Entrega final do Projeto (23/11)?
         </span>
         <button
           onClick={() => setActiveTab('ai-assistant')}

@@ -1,5 +1,5 @@
 import type { Subject, Task, StudyMaterial, SubjectModule, Evaluation, Priority, TaskStatus, TaskType } from '../types';
-import { INITIAL_SUBJECTS } from '../data/initialData';
+import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 
 export interface ClassroomSyncResult {
   subjects: Subject[];
@@ -334,148 +334,10 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
  * avaliações, notas, módulos e todas as atividades do Classroom do aluno Impacta).
  */
 export function buildFullClassroomImpactaSync(currentSubjects: Subject[]): ClassroomSyncResult {
-  const fullClassroomTasks: Task[] = [
-    {
-      id: 'classroom-1',
-      title: 'Desafio da Procedure',
-      subjectId: 'sql-fundamentals',
-      subjectName: 'SQL Fundamentals',
-      dueDate: '2026-11-07',
-      dueTime: '23:59',
-      priority: 'alta',
-      status: 'todo',
-      type: 'exercicio',
-      isCriticalMvp: false,
-      description: 'Atividade importada do mural do professor Evandro • Stored Procedures, Triggers e Functions no SQL Server/PostgreSQL.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-2',
-      title: 'Tarefas a serem realizadas',
-      subjectId: 'innovation-lab',
-      subjectName: 'Innovation Lab: Advanced No/Low Code',
-      dueDate: '2026-11-19',
-      dueTime: '23:59',
-      priority: 'media',
-      status: 'todo',
-      type: 'lista',
-      isCriticalMvp: false,
-      description: 'Realizar o upload das tarefas (Markdown, OpenSpec e Documentação CRUD) no Google Classroom.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-3',
-      title: 'Entrega final do Projeto',
-      subjectId: 'innovation-lab',
-      subjectName: 'Innovation Lab: Advanced No/Low Code',
-      dueDate: '2026-11-23',
-      dueTime: '23:59',
-      priority: 'critica',
-      status: 'in_progress',
-      type: 'avaliacao_mvp',
-      isCriticalMvp: true,
-      description: 'Sincronizado do Classroom • Entrega final do MVP EduTrack AI integrado com Supabase, Gemini AI e Deploy Vercel.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-4',
-      title: 'Avaliação Parcial 02',
-      subjectId: 'software-engineering',
-      subjectName: 'Software Engineering',
-      dueDate: '2026-10-21',
-      dueTime: '23:59',
-      priority: 'alta',
-      status: 'completed',
-      type: 'avaliacao',
-      isCriticalMvp: false,
-      description: 'Avaliação sobre os modelos de desenvolvimento, Engenharia de Requisitos, UML e Metodologias Ágeis.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-5',
-      title: 'TA: Uso do Modelo Cascata',
-      subjectId: 'software-engineering',
-      subjectName: 'Software Engineering',
-      dueDate: '2026-08-22',
-      dueTime: '23:59',
-      priority: 'media',
-      status: 'completed',
-      type: 'projeto',
-      isCriticalMvp: false,
-      description: 'Trabalho prático sobre as fases do Modelo Cascata e documentação de escopo entregue no Classroom.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-6',
-      title: 'Dinâmica Modelos de Desenvolvimento',
-      subjectId: 'software-engineering',
-      subjectName: 'Software Engineering',
-      dueDate: '2026-09-02',
-      dueTime: '23:59',
-      priority: 'baixa',
-      status: 'completed',
-      type: 'exercicio',
-      isCriticalMvp: false,
-      description: 'Atividade em grupo sobre principais diagramas da UML 2.5 e comparativo Scrum vs Kanban.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-7',
-      title: 'Modelagem Relacional e Normalização 3FN',
-      subjectId: 'database-design',
-      subjectName: 'Database Design',
-      dueDate: '2026-11-16',
-      dueTime: '23:59',
-      priority: 'alta',
-      status: 'in_progress',
-      type: 'projeto',
-      isCriticalMvp: false,
-      description: 'Sincronizado do Classroom • Entrega do DER Conceitual, Lógico e Físico normalizado até a 3ª Forma Normal.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-8',
-      title: 'Laboratório Prático: Consultas com INNER/LEFT JOIN e Agregações',
-      subjectId: 'sql-fundamentals',
-      subjectName: 'SQL Fundamentals',
-      dueDate: '2026-10-14',
-      dueTime: '23:59',
-      priority: 'media',
-      status: 'completed',
-      type: 'laboratorio',
-      isCriticalMvp: false,
-      description: 'Script SQL entregue no Google Classroom com resolução dos 15 exercícios de JOIN, GROUP BY e HAVING.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-9',
-      title: 'Especificação OpenSpec & Auditoria das Tarefas 01 a 15',
-      subjectId: 'innovation-lab',
-      subjectName: 'Innovation Lab: Advanced No/Low Code',
-      dueDate: '2026-11-15',
-      dueTime: '23:59',
-      priority: 'alta',
-      status: 'completed',
-      type: 'projeto',
-      isCriticalMvp: true,
-      description: 'Sincronizado do Classroom • Repositório GitHub com evidências das tarefas 01 a 15, scripts Python e relatório PDF.',
-      importedFromClassroom: true,
-    },
-    {
-      id: 'classroom-10',
-      title: 'Lista de Exercícios: Álgebra Relacional e Integridade Referencial',
-      subjectId: 'database-design',
-      subjectName: 'Database Design',
-      dueDate: '2026-09-28',
-      dueTime: '23:59',
-      priority: 'media',
-      status: 'completed',
-      type: 'lista',
-      isCriticalMvp: false,
-      description: 'Atividade avaliativa do Classroom sobre chaves primárias, estrangeiras e restrições de integridade.',
-      importedFromClassroom: true,
-    },
-  ];
+  const fullClassroomTasks: Task[] = INITIAL_TASKS.map((t) => ({
+    ...t,
+    importedFromClassroom: true,
+  }));
 
   const baseList = currentSubjects.length > 0 ? currentSubjects : INITIAL_SUBJECTS;
   let materialsCount = 0;
@@ -483,37 +345,42 @@ export function buildFullClassroomImpactaSync(currentSubjects: Subject[]): Class
   let announcementsCount = 0;
 
   const enrichedSubjects: Subject[] = baseList.map((subj) => {
+    const matchedInitial = INITIAL_SUBJECTS.find((s) => s.id === subj.id || s.name.toLowerCase() === subj.name.toLowerCase());
     const subjTasks = fullClassroomTasks.filter((t) => t.subjectId === subj.id);
     const completedCount = subjTasks.filter((t) => t.status === 'completed').length;
     const calculatedProgress =
       subjTasks.length > 0
-        ? Math.max(subj.progress, Math.round((completedCount / subjTasks.length) * 100))
-        : subj.progress;
+        ? Math.round((completedCount / subjTasks.length) * 100)
+        : matchedInitial?.progress ?? subj.progress;
 
     const classroomAnnouncement: StudyMaterial = {
       id: `cls-mural-${subj.id}`,
       title: `Mural Google Classroom • ${subj.name}`,
       category: 'artigo',
       format: 'Mural Classroom',
-      description: `Avisos oficiais, links de aula ao vivo, slides e instruções de entrega sincronizados da turma ${subj.name} (${subj.professors.join(', ')}).`,
+      description: `Avisos oficiais, atividades sincronizadas (${subjTasks.length}) e materiais publicados na turma ${subj.name} (${subj.professors.join(', ')}).`,
       badge: 'Sincronizado Classroom',
     };
 
-    const existingMaterials = Array.isArray(subj.materials) ? subj.materials : [];
-    const hasClassroomMat = existingMaterials.some((m) => m.id === classroomAnnouncement.id);
+    const baseMaterials = matchedInitial?.materials || subj.materials || [];
+    const hasClassroomMat = baseMaterials.some((m) => m.id === classroomAnnouncement.id);
     const mergedMaterials = hasClassroomMat
-      ? existingMaterials
-      : [classroomAnnouncement, ...existingMaterials];
+      ? baseMaterials
+      : [classroomAnnouncement, ...baseMaterials];
+
+    const syncedEvaluations = matchedInitial?.evaluations || subj.evaluations || [];
 
     materialsCount += mergedMaterials.length;
-    evaluationsCount += (subj.evaluations || []).length;
-    announcementsCount += 2;
+    evaluationsCount += syncedEvaluations.length;
+    announcementsCount += 1;
 
     return {
-      ...subj,
+      ...(matchedInitial || subj),
+      id: subj.id,
       progress: calculatedProgress,
       completedHours: Math.round((calculatedProgress / 100) * subj.totalHours),
       materials: mergedMaterials,
+      evaluations: syncedEvaluations,
     };
   });
 
@@ -531,18 +398,48 @@ export function buildFullClassroomImpactaSync(currentSubjects: Subject[]): Class
   };
 }
 
+function parsePortugueseDate(text: string): string | null {
+  // DD/MM/YYYY or DD/MM
+  const slashMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (slashMatch) {
+    const day = slashMatch[1].padStart(2, '0');
+    const month = slashMatch[2].padStart(2, '0');
+    const yearRaw = slashMatch[3];
+    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : '2026';
+    return `${year}-${month}-${day}`;
+  }
+
+  // "07 de nov." / "19 de novembro"
+  const monthsMap: Record<string, string> = {
+    jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06',
+    jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
+  };
+  const ptMatch = text.toLowerCase().match(/\b(\d{1,2})\s+de\s+([a-zç]{3,})/i);
+  if (ptMatch) {
+    const day = ptMatch[1].padStart(2, '0');
+    const prefix = ptMatch[2].slice(0, 3).toLowerCase();
+    if (monthsMap[prefix]) {
+      return `2026-${monthsMap[prefix]}-${day}`;
+    }
+  }
+  return null;
+}
+
 /**
  * Interpreta texto colado diretamente da página do Google Classroom ("Pendentes" / "Atividades" / "Turmas")
  * ou JSON exportado do Google Takeout e converte em disciplinas e tarefas do EduTrack AI.
  */
 export function parseClassroomPastedContent(
   rawContent: string,
-  existingSubjects: Subject[]
+  existingSubjects: Subject[],
+  replaceExisting = true
 ): ClassroomSyncResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {
     throw new Error('Cole o conteúdo copiado do Google Classroom ou um JSON válido.');
   }
+
+  const baseSync = buildFullClassroomImpactaSync(existingSubjects);
 
   // Caso 1: JSON do Google Takeout ou exportação estruturada
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -550,7 +447,6 @@ export function parseClassroomPastedContent(
       const parsed = JSON.parse(trimmed);
       const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || parsed.courses || [];
       if (Array.isArray(list) && list.length > 0) {
-        const baseSync = buildFullClassroomImpactaSync(existingSubjects);
         const importedTasks: Task[] = list.map((item: any, idx: number) => {
           const title = String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`);
           const subjectName = String(item.subjectName || item.courseName || item.turma || 'Innovation Lab: Advanced No/Low Code');
@@ -566,8 +462,8 @@ export function parseClassroomPastedContent(
             subjectName: matchedSub.name,
             dueDate: String(item.dueDate || '2026-11-23').slice(0, 10),
             dueTime: String(item.dueTime || '23:59'),
-            priority: inferred.priority,
-            status: item.status === 'completed' || item.state === 'TURNED_IN' ? 'completed' : 'todo',
+            priority: item.priority || inferred.priority,
+            status: item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : 'todo',
             type: inferred.type,
             isCriticalMvp: inferred.isCriticalMvp,
             description: String(item.description || 'Importado via pacote JSON do Google Classroom.'),
@@ -575,12 +471,13 @@ export function parseClassroomPastedContent(
           };
         });
 
+        const finalTasks = replaceExisting ? importedTasks : [...importedTasks, ...baseSync.tasks];
         return {
           subjects: baseSync.subjects,
-          tasks: [...importedTasks, ...baseSync.tasks],
+          tasks: finalTasks,
           stats: {
             coursesCount: baseSync.subjects.length,
-            tasksCount: importedTasks.length + baseSync.tasks.length,
+            tasksCount: finalTasks.length,
             materialsCount: baseSync.stats.materialsCount,
             evaluationsCount: baseSync.stats.evaluationsCount,
             announcementsCount: baseSync.stats.announcementsCount,
@@ -601,9 +498,19 @@ export function parseClassroomPastedContent(
 
   const extractedTasks: Task[] = [];
   let currentSubject = existingSubjects[0] || INITIAL_SUBJECTS[0];
+  let currentStatus: TaskStatus = 'todo';
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    if (/^(conclu[ií]da|entregue|devolvida)/i.test(line)) {
+      currentStatus = 'completed';
+      continue;
+    }
+    if (/^(atribu[ií]do|pendente|a fazer)/i.test(line)) {
+      currentStatus = 'todo';
+      continue;
+    }
 
     // Verifica se a linha menciona alguma disciplina conhecida
     const matchedSub = existingSubjects.find(
@@ -611,46 +518,55 @@ export function parseClassroomPastedContent(
         line.toLowerCase().includes(s.name.toLowerCase()) ||
         (s.code && line.toLowerCase().includes(s.code.toLowerCase()))
     );
-    if (matchedSub) {
+    if (matchedSub && line.length <= matchedSub.name.length + 15) {
       currentSubject = matchedSub;
       continue;
     }
 
     // Ignora cabeçalhos genéricos do Google Classroom
     if (
-      /^(atribu[ií]do|pendente|conclu[ií]da|sem data|esta semana|pr[oó]xima semana|mais tarde|ver tudo|google classroom|turmas)$/i.test(
+      /^(sem data|esta semana|pr[oó]xima semana|mais tarde|ver tudo|google classroom|turmas|agenda|para fazer)$/i.test(
         line
       )
     ) {
       continue;
     }
 
+    // Verifica se a próxima linha é apenas uma data ou nome de disciplina
+    let dueDate = parsePortugueseDate(line) || '2026-11-23';
+    if (i + 1 < lines.length) {
+      const nextDate = parsePortugueseDate(lines[i + 1]);
+      if (nextDate && lines[i + 1].length < 25) {
+        dueDate = nextDate;
+        i++;
+      }
+    }
+
     const inferred = inferTaskType(line);
     extractedTasks.push({
       id: `classroom-paste-${Date.now()}-${i}`,
-      title: line.slice(0, 110),
+      title: line.replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, '').trim().slice(0, 110) || line.slice(0, 110),
       subjectId: currentSubject.id,
       subjectName: currentSubject.name,
-      dueDate: '2026-11-23',
+      dueDate,
       dueTime: '23:59',
       priority: inferred.priority,
-      status: line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu') ? 'completed' : 'todo',
+      status: line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu') ? 'completed' : currentStatus,
       type: inferred.type,
       isCriticalMvp: inferred.isCriticalMvp,
-      description: `Importado diretamente do texto do Google Classroom (${currentSubject.name}).`,
+      description: `Importado diretamente do Google Classroom (${currentSubject.name}).`,
       importedFromClassroom: true,
     });
   }
 
-  const baseSync = buildFullClassroomImpactaSync(existingSubjects);
-  const combinedTasks = [...extractedTasks, ...baseSync.tasks];
+  const finalTasks = replaceExisting && extractedTasks.length > 0 ? extractedTasks : [...extractedTasks, ...baseSync.tasks];
 
   return {
     subjects: baseSync.subjects,
-    tasks: combinedTasks,
+    tasks: finalTasks,
     stats: {
       coursesCount: baseSync.subjects.length,
-      tasksCount: combinedTasks.length,
+      tasksCount: finalTasks.length,
       materialsCount: baseSync.stats.materialsCount,
       evaluationsCount: baseSync.stats.evaluationsCount,
       announcementsCount: baseSync.stats.announcementsCount,

@@ -14,24 +14,13 @@ import { usePlanner } from '../../context/PlannerContext';
 import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } from '../../utils/helpers';
 
 export const UpcomingTasksSection: React.FC = () => {
-  const { tasks, updateTaskStatus, setActiveTab, setIsNewTaskModalOpen, importClassroomTasks } = usePlanner();
+  const { tasks, updateTaskStatus, setActiveTab, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
   const [filter, setFilter] = useState<'all' | 'mvp' | 'pending'>('all');
-  const [isSyncingClassroom, setIsSyncingClassroom] = useState(false);
-  const [syncStepMessage, setSyncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
+  const [isSyncingClassroom] = useState(false);
+  const [syncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
 
   const handleSyncClassroom = () => {
-    if (isSyncingClassroom) return;
-    setIsSyncingClassroom(true);
-    setSyncStepMessage('Autenticando via Google Workspace da Impacta...');
-
-    setTimeout(() => {
-      setSyncStepMessage('Importando turmas e atividades pendentes do Google Classroom...');
-    }, 1000);
-
-    setTimeout(() => {
-      importClassroomTasks();
-      setIsSyncingClassroom(false);
-    }, 2100);
+    setIsClassroomModalOpen(true);
   };
 
   const filteredTasks = tasks.filter((task) => {

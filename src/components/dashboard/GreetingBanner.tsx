@@ -4,12 +4,14 @@ import { usePlanner } from '../../context/PlannerContext';
 import { getGreeting } from '../../utils/helpers';
 
 export const GreetingBanner: React.FC = () => {
-  const { setActiveTab, studentName, subjects } = usePlanner();
+  const { setActiveTab, studentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
   const { greeting } = getGreeting(studentName);
 
   const avgProgress = subjects.length > 0
     ? Math.round(subjects.reduce((sum, s) => sum + s.progress, 0) / subjects.length)
     : 0;
+
+  const pendingClassroom = tasks.filter((t) => t.status !== 'completed');
 
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
@@ -80,10 +82,16 @@ export const GreetingBanner: React.FC = () => {
 
       {/* Bottom Bar inside Hero Card */}
       <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[11px] text-rose-200 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3 py-1.5">
+        <div
+          onClick={() => setIsClassroomModalOpen(true)}
+          className="flex items-center gap-2 text-[11px] text-rose-200 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 rounded-xl px-3 py-1.5 cursor-pointer transition-colors"
+          title="Ver sincronização Google Classroom"
+        >
           <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
           <span>
-            Radar: <strong className="text-white">MVP Innovation Lab (08/09)</strong> & Provas (10/09)
+            Classroom ({pendingClassroom.length} pendentes):{' '}
+            <strong className="text-white">Procedure (07/11)</strong> • Tarefas (19/11) •{' '}
+            <strong className="text-white">Entrega MVP (23/11)</strong>
           </span>
         </div>
 

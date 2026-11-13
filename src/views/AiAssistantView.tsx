@@ -23,13 +23,13 @@ export const AiAssistantView: React.FC = () => {
     {
       id: 'msg-welcome',
       sender: 'ai',
-      text: 'Olá! Sou o EduTrack AI, seu copiloto acadêmico personalizado para a Faculdade Impacta Tecnologia. Como as Avaliações Parciais e a Avaliação Parcial MVP de Innovation Lab ocorrem nesta semana (08/09 e 10/09), montei um plano tático de estudo.',
+      text: 'Olá! Sou o EduTrack AI, seu copiloto acadêmico sincronizado com seu Google Classroom da Faculdade Impacta Tecnologia. Analisei suas 5 disciplinas e suas 6 atividades do Classroom e montei seu plano de ação para as 3 entregas pendentes:',
       timestamp: 'Hoje, 19:30',
       checklist: [
-        '08/09: Revisar arquitetura C4 e protótipo funcional para o Prof. Fábio Nogueira (Software Engineering)',
-        '08/09: Validar automação e webhooks no ambiente Low-Code para a Avaliação Parcial MVP (Innovation Lab)',
-        '10/09: Praticar INNER/LEFT JOIN e agregações com GROUP BY para o Prof. Evandro (SQL Fundamentals)',
-        '10/09: Checar dependências funcionais e modelo 3FN (Database Design)'
+        '07/11/2026: Desafio da Procedure — SQL Fundamentals (Prof. Evandro) • Prioridade Alta',
+        '19/11/2026: Tarefas a serem realizadas (Upload Markdown e Docs) — Innovation Lab • Prioridade Média',
+        '23/11/2026: Entrega final do Projeto (MVP) — Innovation Lab: Advanced No/Low Code • Em Andamento (Prioridade Alta)',
+        'Concluídas em Software Engineering: Avaliação Parcial 02 (21/10), TA: Uso do Modelo Cascata (22/08) e Dinâmica Modelos de Desenvolvimento (02/09)'
       ]
     }
   ]);
@@ -120,10 +120,10 @@ export const AiAssistantView: React.FC = () => {
   };
 
   const quickPrompts = [
-    '🎯 Como se preparar para a entrega de 08/09 (Software Eng.)?',
-    '🚀 Dicas para a Avaliação Parcial MVP de Innovation Lab (08/09)',
-    '⚡ Dicas para a prova de SQL com o Prof. Evandro (10/09)',
-    '📊 Resumo de Big-O para a aula de Algoritmos'
+    '⚡ Dicas para o Desafio da Procedure em SQL Fundamentals (07/11)',
+    '📄 Como organizar as Tarefas a serem realizadas (Markdown e Docs - 19/11)?',
+    '🚀 Checklist para a Entrega final do Projeto MVP (Innovation Lab - 23/11)',
+    '📊 Revisão das atividades concluídas de Software Engineering'
   ];
 
   return (
