@@ -193,7 +193,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     id: 'database-design',
     code: 'IMP-DBD202',
     name: 'Database Design',
-    professors: ['Colegiado de Dados'],
+    professors: ['Prof. João Roberto Peres Ortega'],
     progress: 52,
     totalHours: 80,
     completedHours: 41.6,
