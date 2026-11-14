@@ -8,6 +8,7 @@ import {
 import { usePlanner } from '../context/PlannerContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { supabase } from '../lib/supabase';
 import { formatDateBR } from '../utils/helpers';
 
 interface Message {
@@ -37,6 +38,7 @@ export const AiAssistantView: React.FC = () => {
         ];
 
   const [inputQuery, setInputQuery] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'msg-welcome',
@@ -47,89 +49,139 @@ export const AiAssistantView: React.FC = () => {
     },
   ]);
 
-  const handleSendMessage = (textToSend?: string) => {
-    const text = textToSend || inputQuery;
-    if (!text.trim()) return;
+  const buildDynamicReply = (question: string): { text: string; checklist: string[] } => {
+    const lower = question.toLowerCase();
+    const matchedSubject = subjects.find(
+      (s) =>
+        lower.includes(s.name.toLowerCase()) ||
+        s.name
+          .toLowerCase()
+          .split(/\s+/)
+          .some((word) => word.length > 3 && lower.includes(word)) ||
+        (s.professors || []).some((p) => p.toLowerCase().split(/\s+/).some((w) => w.length > 3 && lower.includes(w)))
+    );
 
+    if (matchedSubject) {
+      const subTasks = tasks.filter(
+        (t) =>
+          t.subjectId === matchedSubject.id ||
+          t.subjectName.toLowerCase() === matchedSubject.name.toLowerCase()
+      );
+      const subPending = subTasks.filter((t) => t.status !== 'completed');
+      const profs = (matchedSubject.professors || []).join(', ') || 'Prof. Responsável';
+
+      return {
+        text: `Análise em tempo real de ${matchedSubject.name} (${profs}): você está com ${matchedSubject.progress}% de avanço, ${subPending.length} pendência(s) e ${matchedSubject.materials?.length || 0} material(is) de estudo sincronizados.`,
+        checklist:
+          subPending.length > 0
+            ? subPending.slice(0, 4).map(
+                (t) => `${formatDateBR(t.dueDate)}: ${t.title} • Prioridade ${t.priority.toUpperCase()}`
+              )
+            : [
+                'Nenhuma entrega pendente nesta disciplina! Revise os materiais em Disciplinas para fixar o conteúdo.',
+              ],
+      };
+    }
+
+    const sortedPending = [...pendingTasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const lowestProgress = [...subjects].sort((a, b) => a.progress - b.progress)[0];
+
+    return {
+      text: `Analisando seus dados reais (${subjects.length} disciplinas e ${pendingTasks.length} entregas pendentes em ${institutionLabel}): recomendo priorizar os prazos mais próximos e equilibrar ${lowestProgress ? `${lowestProgress.name} (${lowestProgress.progress}%)` : 'as matérias em aberto'}.`,
+      checklist:
+        sortedPending.length > 0
+          ? [
+              ...sortedPending.slice(0, 3).map(
+                (t) => `${formatDateBR(t.dueDate)}: ${t.title} — ${t.subjectName}`
+              ),
+              'Use um bloco Pomodoro de 25 a 50 min focado na entrega do topo da lista.',
+            ]
+          : [
+              'Todas as suas entregas estão em dia! Aproveite para revisar os materiais anexados em Disciplinas.',
+              'Mantenha sessões curtas no Pomodoro para consolidar os tópicos da semana.',
+            ],
+    };
+  };
+
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = textToSend || inputQuery;
+    if (!text.trim() || isThinking) return;
+
+    const cleanQuestion = text.trim();
     const userMsg: Message = {
       id: 'msg-' + Date.now(),
       sender: 'user',
-      text: text.trim(),
-      timestamp: 'Agora'
+      text: cleanQuestion,
+      timestamp: 'Agora',
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setInputQuery('');
+    setIsThinking(true);
 
-    // Simulated contextual AI response
-    setTimeout(() => {
-      let aiResponse: Message;
-      const lower = text.toLowerCase();
+    const dynamicFallback = buildDynamicReply(cleanQuestion);
 
-      if (lower.includes('innovation') || lower.includes('low-code') || lower.includes('mvp')) {
-        aiResponse = {
-          id: 'ai-' + Date.now(),
-          sender: 'ai',
-          text: 'Para Innovation Lab: Advanced No/Low Code com o Prof. Evandro (Tarefas 19/11 e Entrega Final do Projeto 23/11), o foco é validação em produção e entregas completas:',
-          timestamp: 'Agora',
-          checklist: [
-            'Confirme o upload de todas as tarefas e arquivos Markdown/Docs solicitados para 19/11.',
-            'Verifique se o EduTrack AI em produção na Vercel e no Supabase está funcionando sem erros.',
-            'Prepare a demonstração ponta a ponta da Entrega Final do Projeto para 23/11.'
-          ]
-        };
-      } else if (lower.includes('software engineering') || lower.includes('fábio') || lower.includes('uml') || lower.includes('cascata')) {
-        aiResponse = {
-          id: 'ai-' + Date.now(),
-          sender: 'ai',
-          text: 'Em Software Engineering com o Prof. Fábio Nogueira, suas entregas registradas no Classroom estão concluídas (Cascata, UML 2.5 e AP2). Confira os pontos-chave de revisão:',
-          timestamp: 'Agora',
-          checklist: [
-            'Garanta que seu repositório Git tenha README detalhado com instruções de execução.',
-            'Mantenha os diagramas UML e especificações de requisitos organizados.',
-            'Revise os modelos de desenvolvimento (Cascata, Ágil, Scrum e Kanban).'
-          ]
-        };
-      } else if (lower.includes('sql') || lower.includes('procedure') || lower.includes('evandro') || lower.includes('database')) {
-        aiResponse = {
-          id: 'ai-' + Date.now(),
-          sender: 'ai',
-          text: 'Para SQL Fundamentals e Innovation Lab com o Prof. Evandro (destaque para Desafio da Procedure em 07/11) e revisão de Database Design, foque em:',
-          timestamp: 'Agora',
-          checklist: [
-            'Valide parâmetros de entrada/saída e tratamento de erros na Stored Procedure do Desafio.',
-            'Revise JOINs múltiplos e agregações com GROUP BY e HAVING.',
-            'Na 3ª Forma Normal (3FN), elimine dependências transitivas entre atributos não-chave.'
-          ]
-        };
-      } else if (lower.includes('algoritmos') || lower.includes('odair') || lower.includes('joão')) {
-        aiResponse = {
-          id: 'ai-' + Date.now(),
-          sender: 'ai',
-          text: 'Com os professores Odair e João Roberto em Programming & Algorithms, preste atenção especial à análise assintótica Big-O:',
-          timestamp: 'Agora',
-          checklist: [
-            'QuickSort: O(n log n) no caso médio, O(n²) no pior caso (pivô inadequado).',
-            'MergeSort: Sempre O(n log n), estável, mas consome O(n) de memória auxiliar.',
-            'Recursão: Certifique-se sempre de identificar a condição de parada (caso base) para evitar estouro de pilha (StackOverflow).'
-          ]
-        };
-      } else {
-        aiResponse = {
-          id: 'ai-' + Date.now(),
-          sender: 'ai',
-          text: `Analisando seu plano para "${text}": Recomendo bloquear 1 bloco Pomodoro de 50 minutos na seção de Estudo e focar nas pendências de maior peso percentual da semana!`,
-          timestamp: 'Agora',
-          checklist: [
-            'Revise o checklist das Avaliações Parciais e MVP no Dashboard.',
-            'Divida o tempo proporcionalmente ao peso de cada matéria na sua média.',
-            'Faça ao menos 3 exercícios práticos antes de ir para a prova teórica.'
-          ]
-        };
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token && import.meta.env.VITE_SUPABASE_URL) {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-dicas`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            tela: 'AI Copilot',
+            contexto: {
+              pergunta: cleanQuestion,
+              instituicao: institutionLabel,
+              disciplinas: subjects.map((s) => ({ nome: s.name, progresso: s.progress })),
+              pendentes: pendingTasks.slice(0, 8).map((t) => ({
+                titulo: t.title,
+                disciplina: t.subjectName,
+                prazo: t.dueDate,
+                prioridade: t.priority,
+              })),
+            },
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.dica) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'ai-' + Date.now(),
+              sender: 'ai',
+              text: String(data.dica),
+              timestamp: 'Agora',
+              checklist: dynamicFallback.checklist,
+            },
+          ]);
+          return;
+        }
       }
+    } catch {
+      // Fallback dinâmico local baseado nos dados reais do aluno
+    } finally {
+      setIsThinking(false);
+    }
 
-      setMessages(prev => [...prev, aiResponse]);
-    }, 600);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: 'ai-' + Date.now(),
+        sender: 'ai',
+        text: dynamicFallback.text,
+        timestamp: 'Agora',
+        checklist: dynamicFallback.checklist,
+      },
+    ]);
   };
 
   const quickPrompts = [
@@ -315,6 +367,28 @@ export const AiAssistantView: React.FC = () => {
               )}
             </div>
           ))}
+          {isThinking && (
+            <div className="flex gap-3 justify-start">
+              <div
+                className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${
+                  isLight
+                    ? 'bg-indigo-100 border-indigo-200 text-indigo-600'
+                    : 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400'
+                }`}
+              >
+                <Bot className="w-4 h-4 animate-pulse" />
+              </div>
+              <div
+                className={`rounded-2xl px-4 py-3 text-xs animate-pulse ${
+                  isLight
+                    ? 'bg-slate-100 border border-slate-200 text-slate-600'
+                    : 'bg-[#141b2c] border border-white/[0.08] text-slate-300'
+                }`}
+              >
+                Analisando suas disciplinas e prazos com IA...
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Input Bar */}

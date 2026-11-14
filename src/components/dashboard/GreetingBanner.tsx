@@ -1,8 +1,9 @@
 import React from 'react';
-import { ArrowRight, Sparkles, GraduationCap, Flame } from 'lucide-react';
+import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
 import { getGreeting } from '../../utils/helpers';
+import { openAcademicReportPdf } from '../../utils/reportGenerator';
 
 export const GreetingBanner: React.FC = () => {
   const { setActiveTab, studentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
@@ -111,6 +112,23 @@ export const GreetingBanner: React.FC = () => {
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Copilot</span>
+          </button>
+          <button
+            onClick={() =>
+              openAcademicReportPdf({
+                studentName,
+                institution: currentUser?.institution || 'Minha Faculdade',
+                course: currentUser?.course,
+                semester: currentUser?.semester,
+                subjects,
+                tasks,
+              })
+            }
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-semibold text-xs transition-all cursor-pointer"
+            title="Gerar Relatório Acadêmico em PDF"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>Relatório PDF</span>
           </button>
         </div>
       </div>
