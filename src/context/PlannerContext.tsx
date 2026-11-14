@@ -279,7 +279,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
   const [studentNameState, setStudentNameState] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEYS.STUDENT_NAME) || 'Alexandre (Impacta)';
+    return localStorage.getItem(STORAGE_KEYS.STUDENT_NAME) || 'Estudante';
   });
 
   const studentName = currentUser?.name || studentNameState;
@@ -499,7 +499,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         user_id: userId,
         codigo: localSub.code || 'IMP-01',
         nome: localSub.name,
-        professor: localSub.professors?.[0] || 'Prof. Impacta',
+        professor: localSub.professors?.[0] || 'Prof. Responsável',
         carga_horaria_total: localSub.totalHours || 80,
       })
       .select('id')

@@ -4,9 +4,17 @@ import { supabase } from '../lib/supabase';
 
 export type AppUser = User & {
   name?: string;
+  institution?: string;
   course?: string;
   semester?: string;
 };
+
+interface RegisterMetadata {
+  name?: string;
+  institution?: string;
+  course?: string;
+  semester?: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -18,7 +26,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   logout: () => Promise<void>;
-  register: (email: string, password: string) => Promise<any>;
+  register: (email: string, password: string, metadata?: RegisterMetadata) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -170,22 +178,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut().catch(() => {});
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, metadata?: RegisterMetadata) => {
     const cleanEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: metadata ? { data: metadata } : undefined,
+    });
     if (error) return { success: false, error: error.message };
     localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
     localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
+    if (metadata) {
+      localStorage.setItem(`edutrack_user_meta_${cleanEmail}`, JSON.stringify(metadata));
+    }
     return { success: true, data };
   };
 
   const emailPrefix = user?.email ? user.email.split('@')[0] : 'Usuário';
+  const cleanUserEmail = user?.email?.toLowerCase() || '';
+  let storedMeta: RegisterMetadata = {};
+  if (cleanUserEmail) {
+    try {
+      const rawMeta = localStorage.getItem(`edutrack_user_meta_${cleanUserEmail}`);
+      if (rawMeta) storedMeta = JSON.parse(rawMeta);
+    } catch {
+      storedMeta = {};
+    }
+  }
+  const supaMeta = (user?.user_metadata || {}) as RegisterMetadata;
+  const resolvedInstitution =
+    supaMeta.institution ||
+    storedMeta.institution ||
+    (cleanUserEmail.includes('impacta.edu') ? 'Faculdade Impacta' : 'Minha Faculdade');
 
-  const appUser = user ? { 
-    ...user, 
-    name: profileName || emailPrefix, 
-    course: 'Curso', 
-    semester: '1º Semestre' 
+  const appUser = user ? {
+    ...user,
+    name: profileName || supaMeta.name || storedMeta.name || emailPrefix,
+    institution: resolvedInstitution,
+    course: supaMeta.course || storedMeta.course || 'Graduação',
+    semester: supaMeta.semester || storedMeta.semester || '2026.2',
   } as AppUser : null;
 
   const value = {

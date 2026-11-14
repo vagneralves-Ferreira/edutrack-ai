@@ -17,7 +17,7 @@ export const UpcomingTasksSection: React.FC = () => {
   const { tasks, updateTaskStatus, setActiveTab, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
   const [filter, setFilter] = useState<'all' | 'mvp' | 'pending'>('all');
   const [isSyncingClassroom] = useState(false);
-  const [syncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
+  const [syncStepMessage] = useState('Conectando ao seu Google Classroom...');
 
   const handleSyncClassroom = () => {
     setIsClassroomModalOpen(true);
@@ -282,7 +282,7 @@ export const UpcomingTasksSection: React.FC = () => {
                 {syncStepMessage}
               </h3>
               <p className="text-xs text-slate-400">
-                Conectado ao domínio institucional <span className="text-cyan-400 font-mono">@impacta.edu.br</span>
+                Integração com <span className="text-cyan-400 font-mono">Google Classroom & Portais</span>
               </p>
             </div>
 

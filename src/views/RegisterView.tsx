@@ -10,9 +10,10 @@ import {
   Eye, 
   EyeOff, 
   GraduationCap, 
-  Calendar, 
-  ArrowRight, 
-  AlertTriangle
+  Calendar,
+  ArrowRight,
+  AlertTriangle,
+  Building2,
 } from 'lucide-react';
 
 export const RegisterView: React.FC = () => {
@@ -21,6 +22,7 @@ export const RegisterView: React.FC = () => {
   const { setStudentName } = usePlanner();
 
   const [name, setName] = useState('');
+  const [institution, setInstitution] = useState('');
   const [email, setEmail] = useState('');
   const [course, setCourse] = useState('Análise e Desenvolvimento de Sistemas');
   const [semester, setSemester] = useState('1º Semestre');
@@ -63,11 +65,16 @@ export const RegisterView: React.FC = () => {
     }
 
     if (!termsAccepted) {
-      setErrorMessage('É necessário confirmar vínculo com a Faculdade Impacta.');
+      setErrorMessage('É necessário aceitar os termos para personalizar seu planner.');
       return;
     }
 
-    const result: any = await register(email.trim(), password);
+    const result: any = await register(email.trim(), password, {
+      name: name.trim(),
+      institution: institution.trim() || 'Minha Faculdade',
+      course: course.trim() || 'Graduação',
+      semester,
+    });
     if (!result.success) {
       setErrorMessage(result.error || 'Não foi possível concluir o cadastro.');
     } else {
@@ -80,11 +87,12 @@ export const RegisterView: React.FC = () => {
 
   const handlePreFillExample = () => {
     setName('Lucas Mendes');
-    setEmail('lucas.mendes@impacta.edu.br');
+    setInstitution('Cruzeiro do Sul');
+    setEmail('lucas.mendes@cruzeirodosul.edu.br');
     setCourse('Engenharia de Software');
     setSemester('3º Semestre');
-    setPassword('impacta2026');
-    setConfirmPassword('impacta2026');
+    setPassword('estudos2026');
+    setConfirmPassword('estudos2026');
     setErrorMessage(null);
   };
 
@@ -106,7 +114,7 @@ export const RegisterView: React.FC = () => {
           EduTrack <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">AI</span>
         </h1>
         <p className="mt-1.5 text-xs text-slate-400">
-          Novo Cadastro de Estudante • Faculdade Impacta Tecnologia
+          Novo Cadastro de Estudante • Para Qualquer Faculdade
         </p>
       </div>
 
@@ -147,7 +155,7 @@ export const RegisterView: React.FC = () => {
               type="button"
               onClick={handlePreFillExample}
               className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-lg transition-colors shrink-0 cursor-pointer shadow-sm"
-              title="Preenche campos de exemplo de estudante Impacta"
+              title="Preenche campos de exemplo de estudante"
             >
               ⚡ Preencher Exemplo
             </button>
@@ -189,10 +197,39 @@ export const RegisterView: React.FC = () => {
               </div>
             </div>
 
-            {/* E-mail Acadêmico */}
+            {/* Instituição / Faculdade */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                E-mail Acadêmico (Impacta) *
+                Faculdade / Universidade *
+              </label>
+              <div className="relative rounded-xl">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  list="institution-suggestions"
+                  placeholder="Ex: Faculdade Impacta, Cruzeiro do Sul, FIAP, USP..."
+                  value={institution}
+                  onChange={(e) => setInstitution(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                />
+                <datalist id="institution-suggestions">
+                  <option value="Faculdade Impacta" />
+                  <option value="Cruzeiro do Sul" />
+                  <option value="FIAP" />
+                  <option value="Anhembi Morumbi" />
+                  <option value="UNINOVE" />
+                  <option value="USP" />
+                </datalist>
+              </div>
+            </div>
+
+            {/* E-mail Acadêmico ou Pessoal */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                E-mail Acadêmico ou Pessoal *
               </label>
               <div className="relative rounded-xl">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -201,7 +238,7 @@ export const RegisterView: React.FC = () => {
                 <input
                   type="email"
                   required
-                  placeholder="seu.nome@impacta.edu.br"
+                  placeholder="seu.nome@faculdade.edu.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
@@ -219,17 +256,22 @@ export const RegisterView: React.FC = () => {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <GraduationCap className="w-4 h-4" />
                   </div>
-                  <select
+                  <input
+                    type="text"
+                    list="course-suggestions"
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
-                  >
-                    <option value="Análise e Desenvolvimento de Sistemas">Análise e Desenv. de Sistemas (ADS)</option>
-                    <option value="Engenharia de Software">Engenharia de Software</option>
-                    <option value="Ciência da Computação">Ciência da Computação</option>
-                    <option value="Banco de Dados & Big Data">Banco de Dados & Big Data</option>
-                    <option value="Sistemas de Informação">Sistemas de Informação</option>
-                  </select>
+                    placeholder="Ex: ADS, Direito, Engenharia..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  />
+                  <datalist id="course-suggestions">
+                    <option value="Análise e Desenvolvimento de Sistemas" />
+                    <option value="Engenharia de Software" />
+                    <option value="Ciência da Computação" />
+                    <option value="Sistemas de Informação" />
+                    <option value="Administração" />
+                    <option value="Direito" />
+                  </datalist>
                 </div>
               </div>
 
@@ -317,7 +359,7 @@ export const RegisterView: React.FC = () => {
                   className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800/70 cursor-pointer"
                 />
                 <span className="leading-snug">
-                  Confirmo que sou aluno regularmente matriculado no semestre 2026.2 na <strong>Faculdade Impacta Tecnologia</strong> e autorizo a personalização do planner.
+                  Confirmo que sou estudante e autorizo a personalização do meu planner acadêmico no <strong>EduTrack AI</strong>.
                 </span>
               </label>
             </div>
@@ -331,7 +373,7 @@ export const RegisterView: React.FC = () => {
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 animate-spin" />
-                  <span>Cadastrando estudante na Impacta...</span>
+                  <span>Criando sua conta acadêmica...</span>
                 </>
               ) : (
                 <>
@@ -358,7 +400,7 @@ export const RegisterView: React.FC = () => {
         </div>
 
         <p className="mt-5 text-center text-[11px] text-slate-500">
-          Faculdade Impacta Tecnologia • Todos os direitos acadêmicos reservados
+          EduTrack AI • Cockpit Acadêmico Multi-Instituição
         </p>
       </div>
     </div>

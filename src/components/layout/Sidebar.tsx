@@ -71,9 +71,9 @@ export const Sidebar: React.FC = () => {
             <GraduationCap className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-200 truncate">Faculdade Impacta</p>
+            <p className="text-xs font-semibold text-slate-200 truncate">{currentUser?.institution || 'Minha Faculdade'}</p>
             <p className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-              <span>Semestre 2026.2</span>
+              <span>{currentUser?.semester || 'Semestre 2026.2'}</span>
               <span className="w-1 h-1 rounded-full bg-emerald-400" />
               <span className="text-emerald-400 font-medium">{subjects.length} Ativas</span>
             </p>

@@ -196,7 +196,7 @@ export const LoginView: React.FC = () => {
               </span>
             </h2>
             <p className="text-xs text-slate-300/85 mt-3 leading-relaxed">
-              Planejamento em Bento Grid integrado ao Supabase e Gemini AI para as disciplinas da Faculdade Impacta Tecnologia.
+              Planejamento em Bento Grid integrado ao Supabase e Gemini AI para organizar disciplinas, entregas e estudos de qualquer faculdade.
             </p>
           </div>
 
@@ -216,19 +216,19 @@ export const LoginView: React.FC = () => {
         <div className="lg:col-span-6 p-7 sm:p-10 flex flex-col justify-center">
           <div className="mb-6">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
-            <p className="text-slate-400 text-xs mt-1">Entre com sua conta institucional da Faculdade Impacta</p>
+            <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">E-mail institucional</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">E-mail de acesso</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nome@impacta.edu.br"
+                  placeholder="seu.nome@faculdade.edu.br"
                   className="w-full bg-white/[0.04] border border-white/[0.09] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-all"
                 />
               </div>

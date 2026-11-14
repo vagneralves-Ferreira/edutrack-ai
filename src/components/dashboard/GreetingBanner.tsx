@@ -1,10 +1,12 @@
 import React from 'react';
 import { ArrowRight, Sparkles, GraduationCap, Flame } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
+import { useAuth } from '../../context/AuthContext';
 import { getGreeting } from '../../utils/helpers';
 
 export const GreetingBanner: React.FC = () => {
   const { setActiveTab, studentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
+  const { currentUser } = useAuth();
   const { greeting } = getGreeting(studentName);
 
   const avgProgress = subjects.length > 0
@@ -25,9 +27,9 @@ export const GreetingBanner: React.FC = () => {
 
       <div className="relative z-10 flex items-start justify-between gap-4">
         <div className="space-y-2.5 max-w-md">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[11px] font-bold tracking-wide">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[11px] font-bold tracking-wide uppercase">
             <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
-            <span>FACULDADE IMPACTA • 2026.2</span>
+            <span>{(currentUser?.institution || 'Minha Faculdade').toUpperCase()} • {currentUser?.semester || '2026.2'}</span>
           </div>
 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">

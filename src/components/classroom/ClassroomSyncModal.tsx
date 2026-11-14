@@ -362,7 +362,7 @@ export const ClassroomSyncModal: React.FC = () => {
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>4. Dados Base Impacta</span>
+            <span>4. Modelo Exemplo (Impacta)</span>
           </button>
         </div>
 
@@ -394,7 +394,7 @@ export const ClassroomSyncModal: React.FC = () => {
                     <a href="https://script.google.com/home/start" target="_blank" rel="noreferrer" className="text-cyan-300 underline">
                       script.google.com
                     </a>{' '}
-                    com seu e-mail <strong>@aluno.impacta.edu.br</strong> → <em>Novo projeto</em>.
+                    com seu e-mail do <strong>Google Classroom</strong> (acadêmico ou pessoal) → <em>Novo projeto</em>.
                   </li>
                   <li>
                     Cole o código no editor, clique em <strong>Serviços (+)</strong> à esquerda → adicione <strong>Google Classroom API</strong>.
