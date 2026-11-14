@@ -176,6 +176,8 @@ function normalizeSubject(raw: any): Subject {
   const profArray =
     matchedInitial?.id === 'innovation-lab' && rawProfs.some((p: string) => p.includes('Fábio'))
       ? ['Prof. Evandro']
+      : matchedInitial?.id === 'database-design' && rawProfs.some((p: string) => p.includes('Evandro'))
+      ? ['Colegiado de Dados']
       : rawProfs;
 
   return {

@@ -94,7 +94,7 @@ export const AiAssistantView: React.FC = () => {
         aiResponse = {
           id: 'ai-' + Date.now(),
           sender: 'ai',
-          text: 'Para SQL Fundamentals, Database Design e Innovation Lab com o Prof. Evandro (destaque para Desafio da Procedure em 07/11), foque em:',
+          text: 'Para SQL Fundamentals e Innovation Lab com o Prof. Evandro (destaque para Desafio da Procedure em 07/11) e revisão de Database Design, foque em:',
           timestamp: 'Agora',
           checklist: [
             'Valide parâmetros de entrada/saída e tratamento de erros na Stored Procedure do Desafio.',
