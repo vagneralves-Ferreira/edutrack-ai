@@ -275,7 +275,7 @@ export const TasksView: React.FC = () => {
                           key={task.id}
                           className={`rounded-xl p-4 border transition-all group ${
                             task.isCriticalMvp && task.status !== 'completed'
-                              ? 'bg-gradient-to-b from-amber-500/12 to-white/[0.02] border-amber-500/30 hover:border-amber-500/50'
+                              ? 'kanban-mvp-card bg-gradient-to-b from-amber-500/12 to-white/[0.02] border-amber-500/30 hover:border-amber-500/50'
                               : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05] hover:border-white/[0.14]'
                           }`}
                         >
