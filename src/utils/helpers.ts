@@ -16,15 +16,15 @@ export function getDaysRemaining(dueDateStr: string): {
   isToday: boolean;
   isPast: boolean;
 } {
-  // Current simulated base date: 2026-09-05 (matching current context)
-  const now = new Date('2026-09-05T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const target = new Date(dueDateStr + 'T00:00:00');
   
   const diffTime = target.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
-    return { days: diffDays, label: 'Expirada', isUrgent: true, isToday: false, isPast: true };
+    return { days: diffDays, label: 'Atrasada', isUrgent: true, isToday: false, isPast: true };
   }
   if (diffDays === 0) {
     return { days: 0, label: 'Hoje!', isUrgent: true, isToday: true, isPast: false };

@@ -341,7 +341,7 @@ export const TasksView: React.FC = () => {
                             </div>
 
                             <span className={`font-semibold ${isUrgent && task.status !== 'completed' ? 'text-amber-400' : 'text-slate-400'}`}>
-                              {label}
+                              {task.status === 'completed' ? 'Concluída' : label}
                             </span>
                           </div>
 
@@ -479,7 +479,7 @@ export const TasksView: React.FC = () => {
                         {formatDateBR(task.dueDate)} {task.dueTime ? `(${task.dueTime})` : ''}
                       </span>
                       <span className={`text-[10px] font-semibold ${isUrgent && !isCompleted ? 'text-amber-400' : 'text-slate-400'}`}>
-                        {label}
+                        {isCompleted ? 'Concluída' : label}
                       </span>
                     </div>
 

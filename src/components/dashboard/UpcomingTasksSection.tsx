@@ -239,7 +239,7 @@ export const UpcomingTasksSection: React.FC = () => {
                         {formatDateBR(task.dueDate)}
                       </span>
                       <span className={`text-[10px] ${isUrgent && !isCompleted ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
-                        {label}
+                        {isCompleted ? 'Concluída' : label}
                       </span>
                     </div>
                   </div>
