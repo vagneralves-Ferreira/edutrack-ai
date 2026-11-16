@@ -158,7 +158,7 @@ export const UpcomingTasksSection: React.FC = () => {
                             )}
                           </div>
 
-                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                          <h4 className="cockpit-highlight-title text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
                             {task.title}
                           </h4>
                           <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">

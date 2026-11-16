@@ -35,7 +35,7 @@ export const GreetingBanner: React.FC = () => {
 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
             {greeting}{' '}
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
+            <span className="cockpit-hero-gradient block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
               Cockpit Acadêmico
             </span>
           </h1>
