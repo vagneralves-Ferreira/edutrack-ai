@@ -82,7 +82,7 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3 pb-2">
+    <header className="top-header-backdrop sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3 pb-2 bg-[#07070b]/85 backdrop-blur-md">
       <div className="top-dock-shell max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-3 sm:px-5 h-16 flex items-center justify-between gap-2 xl:gap-4 transition-all">
         
         {/* Left: Brand Identity + Impacta Pill */}

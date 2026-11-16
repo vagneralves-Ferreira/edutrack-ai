@@ -257,6 +257,10 @@ html.light .classroom-modal-header {
   background: linear-gradient(to right, rgba(16, 185, 129, 0.1), #f8fafc, rgba(139, 92, 246, 0.1)) !important;
 }
 
+html.light .top-header-backdrop {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
 html.light .text-amber-300,
 html.light .text-amber-400 {
   color: #d97706 !important;
