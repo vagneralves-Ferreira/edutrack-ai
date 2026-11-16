@@ -123,7 +123,15 @@ export const SubjectsView: React.FC = () => {
                   <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">{activeSubject.code}</span>
                   <span className="text-xs text-slate-400">Faculdade Impacta Tecnologia</span>
                 </div>
-                <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                <span
+                  className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+                    activeSubject.progress >= 100
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      : activeSubject.progress > 0
+                      ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300'
+                      : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
+                  }`}
+                >
                   {activeSubject.progress}% Concluído
                 </span>
               </div>
