@@ -121,7 +121,7 @@ export const Header: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`relative flex items-center gap-1.5 px-2 xl:px-2.5 2xl:px-3 py-1.5 rounded-lg text-[11px] xl:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                className={`relative flex items-center gap-1.5 px-2 xl:px-2.5 py-1.5 rounded-lg text-[11px] xl:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   isActive
                     ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
                     : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
@@ -160,18 +160,12 @@ export const Header: React.FC = () => {
           {/* Quick New Task Button */}
           <button
             onClick={() => setIsNewTaskModalOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 2xl:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-500/20 transition-all active:scale-95 cursor-pointer shrink-0"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 2xl:px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-500/20 transition-all active:scale-95 cursor-pointer shrink-0"
             title="Nova Tarefa"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span className="hidden 2xl:inline">Nova Tarefa</span>
           </button>
-
-          {/* Compact Clock */}
-          <div className="hidden min-[1680px]:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-[11px] font-mono text-slate-300 shrink-0">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{currentDateTime}</span>
-          </div>
 
           {/* Theme Toggle Button (Light / Dark Mode) */}
           <button
@@ -180,15 +174,9 @@ export const Header: React.FC = () => {
             title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
           >
             {theme === 'dark' ? (
-              <>
-                <Sun className="w-4 h-4 text-amber-400" />
-                <span className="text-[11px] font-semibold hidden min-[1680px]:inline">Claro</span>
-              </>
+              <Sun className="w-4 h-4 text-amber-400" />
             ) : (
-              <>
-                <Moon className="w-4 h-4 text-violet-600" />
-                <span className="text-[11px] font-semibold hidden min-[1680px]:inline">Escuro</span>
-              </>
+              <Moon className="w-4 h-4 text-violet-600" />
             )}
           </button>
 
