@@ -3,17 +3,24 @@
 **Disciplina:** Innovation Lab: Desenvolvimento Avançado No/Low Code  
 **Projeto:** EduTrack AI  
 
-## 🎨 Mapeamento do Figma/FlutterFlow para React + Tailwind CSS
+## 🎨 Mapeamento do Design System para React + Tailwind CSS
 
-Em substituição à montagem manual no FlutterFlow, a estrutura de design e navegação do EduTrack AI foi construída de forma modular em React com Tailwind CSS:
+Em substituição à montagem manual no FlutterFlow, toda a interface e navegação do EduTrack AI foi construída de forma modular em React com Tailwind CSS:
 
-### 1. Estrutura de Páginas e Navegação (Views & Layout)
-- **Dashboard (HomePage):** `src/views/DashboardView.tsx` - Visão geral de métricas acadêmicas e progresso.
-- **Disciplinas (SubjectsPage):** `src/views/SubjectsView.tsx` - Gestão de disciplinas ativas e carga horária.
-- **Tarefas (TasksPage):** `src/views/TasksView.tsx` - Lista e status de tarefas acadêmicas.
-- **Navegação (NavBar/Sidebar):** `src/components/layout/Sidebar.tsx` e `Header.tsx` para alternância de telas.
+### 1. Estrutura de Páginas e Navegação (`src/views/` & `src/components/layout/`)
+- **Autenticação (Telas Empilhadas 3D):**
+  - `src/views/LoginView.tsx` — Acesso ao Cockpit, recuperação de senha e alternância de tema responsiva (flutuante no desktop, interna no card no mobile).
+  - `src/views/RegisterView.tsx` — Criação de perfil acadêmico (suporte multi-instituição/curso).
+  - `src/views/ResetPasswordView.tsx` — Redefinição de senha com validação via Supabase Auth.
+- **Área Logada:**
+  - `src/views/DashboardView.tsx` — Visão geral de métricas acadêmicas, progresso e próximas entregas.
+  - `src/views/SubjectsView.tsx` — Gestão de disciplinas, módulos, materiais clicáveis e carga horária.
+  - `src/views/TasksView.tsx` — Gestão de tarefas acadêmicas, filtros e sincronização com Google Classroom.
+  - `src/views/TimerView.tsx` — Cronômetro de foco e sessões de estudo.
+  - `src/views/AiAssistantView.tsx` — Copiloto de estudos com Gemini AI e exportação de relatório em PDF.
+- **Navegação:** `src/components/layout/Sidebar.tsx` e `src/components/layout/Header.tsx`.
 
 ### 2. Assets e Ícones (Design System)
-- **Ícones SVG Dinâmicos:** Integrados via `lucide-react` para máxima fidelidade e performance escalar.
-- **Assets Estáticos:** Gerenciados na pasta `src/assets/` e no diretório `assets/`.
-- **Design System:** Cores e variáveis customizadas nativamente via Tailwind CSS no `src/index.css`.
+- **Ícones SVG Dinâmicos:** Integrados via `lucide-react`.
+- **Assets Estáticos:** Organizados em `src/assets/` e `assets/`.
+- **Tokens e Temas:** Variáveis CSS e utilitários Bento Grid definidos em `src/index.css` com suporte a `html.dark` e `html.light`.
