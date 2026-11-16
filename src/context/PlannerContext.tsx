@@ -58,7 +58,12 @@ const STORAGE_KEYS = {
   SUBJECTS_LEGACY: 'edutrack_subjects_v5',
   TASKS: 'edutrack_tasks_v6',
   STUDENT_NAME: 'edutrack_student_name_v1',
+  SYNC_META: 'edutrack_classroom_sync_meta',
 };
+
+function getScopedKey(base: string, userId?: string | null): string | null {
+  return userId ? `${base}_${userId}` : null;
+}
 
 const CLASSROOM_MOCK_TASKS: Task[] = [
   {
@@ -217,18 +222,12 @@ function normalizeSubject(raw: any): Subject {
   };
 }
 
-function loadSubjectsFromStorage(): Subject[] {
+function loadSubjectsFromStorage(userId?: string | null): Subject[] {
+  const key = getScopedKey(STORAGE_KEYS.SUBJECTS, userId);
+  if (!key) return INITIAL_SUBJECTS;
   try {
-    const savedV3 = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
-    const savedLegacy = localStorage.getItem(STORAGE_KEYS.SUBJECTS_LEGACY);
-
-    const parsedV3 = savedV3 ? JSON.parse(savedV3) : null;
-    const parsedLegacy = savedLegacy ? JSON.parse(savedLegacy) : null;
-
-    const candidate =
-      Array.isArray(parsedLegacy) && (!Array.isArray(parsedV3) || parsedLegacy.length > parsedV3.length)
-        ? parsedLegacy
-        : parsedV3;
+    const saved = localStorage.getItem(key);
+    const candidate = saved ? JSON.parse(saved) : null;
 
     if (Array.isArray(candidate) && candidate.length > 0) {
       const normalized = candidate.map(normalizeSubject);
@@ -245,13 +244,49 @@ function loadSubjectsFromStorage(): Subject[] {
   return INITIAL_SUBJECTS;
 }
 
-function persistSubjectsToStorage(subjectsList: Subject[]) {
+function persistSubjectsToStorage(subjectsList: Subject[], userId?: string | null) {
+  const key = getScopedKey(STORAGE_KEYS.SUBJECTS, userId);
+  if (!key) return;
   try {
-    const serialized = JSON.stringify(subjectsList);
-    localStorage.setItem(STORAGE_KEYS.SUBJECTS, serialized);
-    localStorage.setItem(STORAGE_KEYS.SUBJECTS_LEGACY, serialized);
+    localStorage.setItem(key, JSON.stringify(subjectsList));
   } catch (e) {
     console.error('Error saving subjects to localStorage', e);
+  }
+}
+
+function loadTasksFromStorage(userId?: string | null): Task[] {
+  const key = getScopedKey(STORAGE_KEYS.TASKS, userId);
+  if (!key) return INITIAL_TASKS;
+  const saved = localStorage.getItem(key);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as Task[];
+      if (Array.isArray(parsed)) {
+        const sanitized = parsed.filter((t) => !isCorruptedCodeTask(t));
+        const missingCanonical = INITIAL_TASKS.filter(
+          (canon) => !sanitized.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
+        );
+        const restored = sanitized.length > 0 ? [...sanitized, ...missingCanonical] : INITIAL_TASKS;
+        if (sanitized.length !== parsed.length || missingCanonical.length > 0 || sanitized.length === 0) {
+          localStorage.setItem(key, JSON.stringify(restored));
+        }
+        return restored;
+      }
+    } catch (e) {
+      console.error('Error loading tasks from localStorage', e);
+    }
+  }
+  return INITIAL_TASKS;
+}
+
+function loadSyncMetaFromStorage(userId?: string | null): ClassroomSyncMetadata | null {
+  const key = getScopedKey(STORAGE_KEYS.SYNC_META, userId);
+  if (!key) return null;
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -259,6 +294,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const userId = currentUser?.id || null;
 
   const activeTab: ViewTab = useMemo(() => {
     const raw = location.pathname.replace(/^\//, '');
@@ -273,46 +309,34 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     navigate(`/${tab}`);
   };
 
-  const [subjects, setSubjects] = useState<Subject[]>(() => loadSubjectsFromStorage());
+  const [subjects, setSubjects] = useState<Subject[]>(() => loadSubjectsFromStorage(userId));
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(() => subjects[0] || null);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState<boolean>(false);
   const [isClassroomModalOpen, setIsClassroomModalOpen] = useState<boolean>(false);
-  const [lastClassroomSync, setLastClassroomSync] = useState<ClassroomSyncMetadata | null>(() => {
-    try {
-      const saved = localStorage.getItem('edutrack_classroom_sync_meta');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [lastClassroomSync, setLastClassroomSync] = useState<ClassroomSyncMetadata | null>(() =>
+    loadSyncMetaFromStorage(userId)
+  );
   const [studentNameState, setStudentNameState] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEYS.STUDENT_NAME) || 'Estudante';
+    const key = getScopedKey(STORAGE_KEYS.STUDENT_NAME, userId);
+    return (key && localStorage.getItem(key)) || 'Estudante';
   });
 
   const studentName = currentUser?.name || studentNameState;
 
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.TASKS);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Task[];
-        if (Array.isArray(parsed)) {
-          const sanitized = parsed.filter((t) => !isCorruptedCodeTask(t));
-          const missingCanonical = INITIAL_TASKS.filter(
-            (canon) => !sanitized.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
-          );
-          const restored = sanitized.length > 0 ? [...sanitized, ...missingCanonical] : INITIAL_TASKS;
-          if (sanitized.length !== parsed.length || missingCanonical.length > 0 || sanitized.length === 0) {
-            localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(restored));
-          }
-          return restored;
-        }
-      } catch (e) {
-        console.error('Error loading tasks from localStorage', e);
-      }
-    }
-    return INITIAL_TASKS;
-  });
+  const [tasks, setTasks] = useState<Task[]>(() => loadTasksFromStorage(userId));
+
+  // Limpa e recarrega o estado em memória quando o usuário faz logout ou troca de conta
+  useEffect(() => {
+    const scopedSubs = loadSubjectsFromStorage(userId);
+    const scopedTasks = loadTasksFromStorage(userId);
+    const scopedSync = loadSyncMetaFromStorage(userId);
+    const nameKey = getScopedKey(STORAGE_KEYS.STUDENT_NAME, userId);
+    setSubjects(scopedSubs);
+    setSelectedSubject(scopedSubs[0] || null);
+    setTasks(scopedTasks);
+    setLastClassroomSync(scopedSync);
+    setStudentNameState((nameKey && localStorage.getItem(nameKey)) || currentUser?.name || 'Estudante');
+  }, [userId]);
 
   // Sincronização inicial com o Supabase (SELECT nas tabelas subjects e tasks)
   useEffect(() => {
@@ -379,7 +403,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           const reconciledSubjects: Subject[] = [...uniqueDbSubjects, ...missingLocalSubjects];
           setSubjects(reconciledSubjects);
-          persistSubjectsToStorage(reconciledSubjects);
+          persistSubjectsToStorage(reconciledSubjects, userId);
         }
 
         if (tasksError) {
@@ -477,7 +501,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           const finalTasks = [...cleanDbTasks, ...missingCanonical];
           setTasks(finalTasks);
-          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(finalTasks));
+          const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(finalTasks));
         }
       } catch (err) {
         console.warn('Conexão com Supabase em modo fallback local:', err);
@@ -536,16 +561,18 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   useEffect(() => {
-    persistSubjectsToStorage(subjects);
-  }, [subjects]);
+    persistSubjectsToStorage(subjects, userId);
+  }, [subjects, userId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-  }, [tasks]);
+    const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+    if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(tasks));
+  }, [tasks, userId]);
 
   const setStudentName = (name: string) => {
     setStudentNameState(name);
-    localStorage.setItem(STORAGE_KEYS.STUDENT_NAME, name);
+    const nameKey = getScopedKey(STORAGE_KEYS.STUDENT_NAME, userId);
+    if (nameKey) localStorage.setItem(nameKey, name);
   };
 
   const addSubject = (subjectData: NewSubjectInput): Subject => {
@@ -604,7 +631,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setTasks((prev) => {
       const updated = [newTask, ...prev];
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updated));
+      const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+      if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(updated));
       return updated;
     });
 
@@ -655,7 +683,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTasks((prev) => {
       const manualTasks = prev.filter((t) => !t.importedFromClassroom && !LEGACY_TASK_IDS.has(t.id));
       const merged = [...result.tasks, ...manualTasks];
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(merged));
+      const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+      if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(merged));
       return merged;
     });
 
@@ -670,7 +699,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       source: result.source,
     };
     setLastClassroomSync(meta);
-    localStorage.setItem('edutrack_classroom_sync_meta', JSON.stringify(meta));
+    const syncKey = getScopedKey(STORAGE_KEYS.SYNC_META, userId);
+    if (syncKey) localStorage.setItem(syncKey, JSON.stringify(meta));
 
     confetti({
       particleCount: 80,
@@ -819,9 +849,10 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const resetToDefault = () => {
     setSubjects(INITIAL_SUBJECTS);
     setTasks(INITIAL_TASKS);
-    localStorage.removeItem(STORAGE_KEYS.SUBJECTS);
-    localStorage.removeItem(STORAGE_KEYS.SUBJECTS_LEGACY);
-    localStorage.removeItem(STORAGE_KEYS.TASKS);
+    const subKey = getScopedKey(STORAGE_KEYS.SUBJECTS, userId);
+    const taskKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+    if (subKey) localStorage.removeItem(subKey);
+    if (taskKey) localStorage.removeItem(taskKey);
   };
 
   return (
