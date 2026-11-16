@@ -18,9 +18,12 @@ export const SubjectsView: React.FC = () => {
     ? tasks.filter((t) => t.subjectId === activeSubject.id || t.subjectName.toLowerCase() === activeSubject.name.toLowerCase())
     : [];
 
+  const [isSubmittingSubject, setIsSubmittingSubject] = useState(false);
+
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newCode.trim()) return;
+    if (isSubmittingSubject || !newName.trim() || !newCode.trim()) return;
+    setIsSubmittingSubject(true);
 
     addSubject({
       code: newCode.trim(),
@@ -31,6 +34,7 @@ export const SubjectsView: React.FC = () => {
     setNewCode('');
     setNewName('');
     setNewProf('');
+    setIsSubmittingSubject(false);
     setIsModalOpen(false);
   };
 
@@ -375,7 +379,8 @@ export const SubjectsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-md cursor-pointer"
+                  disabled={isSubmittingSubject}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer"
                 >
                   Salvar Disciplina
                 </button>

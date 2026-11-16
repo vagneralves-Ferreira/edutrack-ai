@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { Subject, Task, TaskStatus, ViewTab } from '../types';
 import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
@@ -295,6 +295,10 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const location = useLocation();
   const { currentUser } = useAuth();
   const userId = currentUser?.id || null;
+  const fetchInFlightRef = useRef<string | null>(null);
+  const addSubjectInFlightRef = useRef<boolean>(false);
+  const addTaskInFlightRef = useRef<boolean>(false);
+  const syncInFlightRef = useRef<boolean>(false);
 
   const activeTab: ViewTab = useMemo(() => {
     const raw = location.pathname.replace(/^\//, '');
@@ -340,25 +344,33 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Sincronização inicial com o Supabase (SELECT nas tabelas subjects e tasks)
   useEffect(() => {
+    if (!userId) return;
+    if (fetchInFlightRef.current === userId) return;
+    fetchInFlightRef.current = userId;
+
     const fetchFromSupabase = async () => {
       try {
         // 1. Buscar disciplinas no Supabase
-        const { data: dbSubjects } = await supabase.from('subjects').select('*');
+        const { data: dbSubjects } = await supabase
+          .from('subjects')
+          .select('*')
+          .eq('user_id', userId);
 
         // 2. Buscar tarefas no Supabase
         const { data: dbTasks, error: tasksError } = await supabase
           .from('tasks')
           .select('*')
+          .eq('user_id', userId)
           .order('created_at', { ascending: false });
 
         // Reconciliação de disciplinas se existir usuário autenticado
         const { data: authData } = await supabase.auth.getUser();
-        const userId = authData?.user?.id;
+        const authUserId = authData?.user?.id;
 
-        if (userId) {
+        if (authUserId && authUserId === userId) {
           await supabase.from('profiles').upsert(
             {
-              id: userId,
+              id: authUserId,
               nome: studentName,
               curso: 'Ciência da Computação',
               semestre_atual: '2026.2',
@@ -380,19 +392,27 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
           }
 
-          const missingLocalSubjects = subjects.filter(
-            (localSub) =>
-              !uniqueDbSubjects.some(
-                (dbSub) =>
-                  dbSub.name.toLowerCase() === localSub.name.toLowerCase() ||
-                  dbSub.code.toLowerCase() === localSub.code.toLowerCase()
-              )
-          );
+          const missingLocalSubjects: Subject[] = [];
+          for (const localSub of INITIAL_SUBJECTS) {
+            const existsInDb = uniqueDbSubjects.some(
+              (dbSub) =>
+                dbSub.name.toLowerCase() === localSub.name.toLowerCase() ||
+                dbSub.code.toLowerCase() === localSub.code.toLowerCase()
+            );
+            const alreadyQueued = missingLocalSubjects.some(
+              (m) =>
+                m.name.toLowerCase() === localSub.name.toLowerCase() ||
+                m.code.toLowerCase() === localSub.code.toLowerCase()
+            );
+            if (!existsInDb && !alreadyQueued) {
+              missingLocalSubjects.push(localSub);
+            }
+          }
 
           if (missingLocalSubjects.length > 0) {
             await supabase.from('subjects').insert(
               missingLocalSubjects.map((sub) => ({
-                user_id: userId,
+                user_id: authUserId,
                 codigo: sub.code,
                 nome: sub.name,
                 professor: sub.professors?.[0] || 'Prof. Responsável',
@@ -403,7 +423,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           const reconciledSubjects: Subject[] = [...uniqueDbSubjects, ...missingLocalSubjects];
           setSubjects(reconciledSubjects);
-          persistSubjectsToStorage(reconciledSubjects, userId);
+          persistSubjectsToStorage(reconciledSubjects, authUserId);
         }
 
         if (tasksError) {
@@ -506,22 +526,26 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       } catch (err) {
         console.warn('Conexão com Supabase em modo fallback local:', err);
+      } finally {
+        if (fetchInFlightRef.current === userId) {
+          fetchInFlightRef.current = null;
+        }
       }
     };
 
     fetchFromSupabase();
-  }, [currentUser]);
+  }, [userId]);
 
   // Função auxiliar para garantir vínculo de usuário e disciplina (UUID) no Supabase
   const resolveSupabaseIds = async (localSubjectId: string, localSubjectName?: string) => {
     const { data: authData } = await supabase.auth.getUser();
-    const userId = authData?.user?.id;
-    if (!userId) return null;
+    const uid = authData?.user?.id;
+    if (!uid) return null;
 
     // Garante que o perfil existe na tabela profiles
     await supabase.from('profiles').upsert(
       {
-        id: userId,
+        id: uid,
         nome: studentName,
         curso: 'Ciência da Computação',
         semestre_atual: '2026.2',
@@ -532,32 +556,37 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const localSub =
       subjects.find((s) => s.id === localSubjectId || s.name === localSubjectName) || subjects[0];
 
-    // Procura a disciplina correspondente no Supabase
-    const { data: existingSub } = await supabase
+    // Procura a disciplina correspondente no Supabase usando limit(1) para evitar falha de maybeSingle em duplicatas
+    const { data: existingSubs } = await supabase
       .from('subjects')
-      .select('id')
-      .eq('user_id', userId)
-      .ilike('nome', localSub.name)
-      .maybeSingle();
+      .select('id, nome, codigo')
+      .eq('user_id', uid);
 
-    if (existingSub?.id) {
-      return { userId, subjectUuid: existingSub.id };
+    const matched = (existingSubs || []).find(
+      (s: any) =>
+        String(s.nome || '').toLowerCase() === localSub.name.toLowerCase() ||
+        String(s.codigo || '').toLowerCase() === (localSub.code || '').toLowerCase()
+    );
+
+    if (matched?.id) {
+      return { userId: uid, subjectUuid: matched.id };
     }
 
     // Se ainda não existir no banco, insere a disciplina e retorna o UUID gerado
     const { data: createdSub } = await supabase
       .from('subjects')
       .insert({
-        user_id: userId,
+        user_id: uid,
         codigo: localSub.code || 'IMP-01',
         nome: localSub.name,
         professor: localSub.professors?.[0] || 'Prof. Responsável',
         carga_horaria_total: localSub.totalHours || 80,
       })
       .select('id')
-      .single();
+      .limit(1);
 
-    return createdSub?.id ? { userId, subjectUuid: createdSub.id } : null;
+    const createdId = Array.isArray(createdSub) ? createdSub[0]?.id : (createdSub as any)?.id;
+    return createdId ? { userId: uid, subjectUuid: createdId } : null;
   };
 
   useEffect(() => {
@@ -592,28 +621,49 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       room: 'Campus Paulista / Online',
     });
 
+    if (addSubjectInFlightRef.current) {
+      return newSub;
+    }
+    addSubjectInFlightRef.current = true;
+
     setSubjects((prev) => {
       const updated = [...prev, newSub];
-      persistSubjectsToStorage(updated);
+      persistSubjectsToStorage(updated, userId);
       return updated;
     });
     setSelectedSubject(newSub);
 
-    // Sincroniza nova disciplina com o Supabase em segundo plano
+    // Sincroniza nova disciplina com o Supabase em segundo plano sem duplicar
     (async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.id) {
-          await supabase.from('subjects').insert({
-            user_id: authData.user.id,
-            codigo: newSub.code,
-            nome: newSub.name,
-            professor: newSub.professors[0],
-            carga_horaria_total: newSub.totalHours,
-          });
+        const uid = authData?.user?.id;
+        if (uid) {
+          const { data: existingSubs } = await supabase
+            .from('subjects')
+            .select('id, nome, codigo')
+            .eq('user_id', uid);
+
+          const alreadyExists = (existingSubs || []).some(
+            (s: any) =>
+              String(s.nome || '').toLowerCase() === newSub.name.toLowerCase() ||
+              String(s.codigo || '').toLowerCase() === newSub.code.toLowerCase()
+          );
+
+          if (!alreadyExists) {
+            await supabase.from('subjects').insert({
+              user_id: uid,
+              codigo: newSub.code,
+              nome: newSub.name,
+              professor: newSub.professors[0],
+              carga_horaria_total: newSub.totalHours,
+            });
+          }
         }
       } catch (e) {
         console.warn('Erro ao salvar disciplina no Supabase:', e);
+      } finally {
+        addSubjectInFlightRef.current = false;
       }
     })();
 
@@ -621,6 +671,9 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addTask = (newTaskData: Omit<Task, 'id'>) => {
+    if (addTaskInFlightRef.current) return;
+    addTaskInFlightRef.current = true;
+
     const tempId = 'task-' + Date.now();
     const newTask: Task = {
       ...newTaskData,
@@ -659,19 +712,24 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (!error && data?.id) {
           setTasks((prev) =>
-            prev.map((t) => (t.id === tempId ? { ...t, id: String(data.id) } : t))
+            prev.map((t) => (t.id === tempId ? { ...t, id: data.id } : t))
           );
         }
       } catch (e) {
-        console.warn('Erro ao inserir tarefa no Supabase:', e);
+        console.warn('Erro ao salvar tarefa no Supabase:', e);
+      } finally {
+        addTaskInFlightRef.current = false;
       }
     })();
   };
 
   const applyClassroomSyncResult = async (result: ClassroomSyncResult): Promise<void> => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    try {
     // 1. Atualiza todas as disciplinas (com materiais, módulos, professores, avaliações e progresso)
     setSubjects(result.subjects);
-    persistSubjectsToStorage(result.subjects);
+    persistSubjectsToStorage(result.subjects, userId);
     if (result.subjects.length > 0) {
       setSelectedSubject((prev) => {
         if (!prev) return result.subjects[0];
@@ -712,27 +770,39 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // 4. Sincroniza disciplinas e tarefas com o Supabase sem duplicar
     try {
       const { data: authData } = await supabase.auth.getUser();
-      const userId = authData?.user?.id;
-      if (userId) {
+      const uid = authData?.user?.id;
+      if (uid) {
         const { data: existingSubs } = await supabase
           .from('subjects')
           .select('id, nome, codigo')
-          .eq('user_id', userId);
+          .eq('user_id', uid);
+
+        const knownSubs = [...(existingSubs || [])];
+        const findSubjectUuid = (code?: string, name?: string): string | null => {
+          const hit = knownSubs.find(
+            (s: any) =>
+              (name && String(s.nome || '').toLowerCase() === name.toLowerCase()) ||
+              (code && String(s.codigo || '').toLowerCase() === code.toLowerCase())
+          );
+          return hit?.id || null;
+        };
 
         for (const subj of result.subjects) {
-          const exists = (existingSubs || []).some(
-            (s: any) =>
-              String(s.nome || '').toLowerCase() === subj.name.toLowerCase() ||
-              String(s.codigo || '').toLowerCase() === subj.code.toLowerCase()
-          );
-          if (!exists) {
-            await supabase.from('subjects').insert({
-              user_id: userId,
-              codigo: subj.code,
-              nome: subj.name,
-              professor: subj.professors.join(', '),
-              carga_horaria_total: subj.totalHours,
-            });
+          if (!findSubjectUuid(subj.code, subj.name)) {
+            const { data: inserted } = await supabase
+              .from('subjects')
+              .insert({
+                user_id: uid,
+                codigo: subj.code,
+                nome: subj.name,
+                professor: subj.professors.join(', '),
+                carga_horaria_total: subj.totalHours,
+              })
+              .select('id, nome, codigo')
+              .limit(1);
+            if (Array.isArray(inserted) && inserted[0]) {
+              knownSubs.push(inserted[0]);
+            }
           }
         }
 
@@ -740,15 +810,22 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await supabase
           .from('tasks')
           .delete()
-          .eq('user_id', userId)
+          .eq('user_id', uid)
           .eq('importado_classroom', true);
 
         for (const clsTask of result.tasks) {
-          const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
-          if (ids) {
+          const matchedSub = result.subjects.find(
+            (s) => s.id === clsTask.subjectId || s.name.toLowerCase() === clsTask.subjectName.toLowerCase()
+          );
+          let subjectUuid = findSubjectUuid(matchedSub?.code, clsTask.subjectName);
+          if (!subjectUuid) {
+            const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
+            subjectUuid = ids?.subjectUuid || null;
+          }
+          if (subjectUuid) {
             await supabase.from('tasks').insert({
-              subject_id: ids.subjectUuid,
-              user_id: ids.userId,
+              subject_id: subjectUuid,
+              user_id: uid,
               titulo: clsTask.title,
               descricao: clsTask.description || '',
               data_entrega: clsTask.dueDate ? new Date(clsTask.dueDate).toISOString() : null,
@@ -761,6 +838,9 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     } catch (e) {
       console.warn('Erro ao sincronizar pacote completo do Classroom com Supabase:', e);
+    }
+    } finally {
+      syncInFlightRef.current = false;
     }
   };
 
