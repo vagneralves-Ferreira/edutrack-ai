@@ -338,7 +338,12 @@ export function buildSyncResultFromCourseBundles(
       id: subjectId,
       code: courseSection || matchedInit?.code || `CLS-${courseId.slice(-3)}`,
       name: courseName,
-      professors: teachersList.length > 0 ? teachersList : matchedInit?.professors || ['Prof. Impacta'],
+      professors:
+        matchedInit?.professors?.length
+          ? matchedInit.professors
+          : teachersList.length > 0
+          ? teachersList
+          : ['Prof. Impacta'],
       progress,
       totalHours,
       completedHours,
