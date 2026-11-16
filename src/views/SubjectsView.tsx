@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
 import { AiDica } from '../components/AiDica';
+import { EmptyPlannerState } from '../components/EmptyPlannerState';
 import { formatDateBR } from '../utils/helpers';
 import type { StudyMaterial } from '../types';
 
 export const SubjectsView: React.FC = () => {
-  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus } = usePlanner();
+  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus, loadError } = usePlanner();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterial | null>(null);
   const [newCode, setNewCode] = useState('');
@@ -87,6 +88,19 @@ export const SubjectsView: React.FC = () => {
         }}
       />
 
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+          {loadError}
+        </div>
+      )}
+
+      {subjects.length === 0 ? (
+        <EmptyPlannerState
+          title="Nenhuma disciplina cadastrada"
+          description="Sua grade está vazia. Adicione uma disciplina manualmente, sincronize com o Google Classroom ou carregue os dados de exemplo."
+          onAddSubject={() => setIsModalOpen(true)}
+        />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-3">
           <div className="flex justify-between items-center px-1">
@@ -325,6 +339,7 @@ export const SubjectsView: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">

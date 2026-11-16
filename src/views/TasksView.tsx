@@ -18,9 +18,10 @@ import {
 } from 'lucide-react';
 import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } from '../utils/helpers';
 import { AiDica } from '../components/AiDica';
+import { EmptyPlannerState } from '../components/EmptyPlannerState';
 
 export const TasksView: React.FC = () => {
-  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
+  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, setIsClassroomModalOpen, loadError } = usePlanner();
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -229,8 +230,19 @@ export const TasksView: React.FC = () => {
         </button>
       </div>
 
-      {/* Content: Kanban or List */}
-      {viewMode === 'kanban' ? (
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+          {loadError}
+        </div>
+      )}
+
+      {/* Content: Empty State, Kanban or List */}
+      {tasks.length === 0 ? (
+        <EmptyPlannerState
+          title="Nenhuma tarefa cadastrada"
+          description="Você ainda não tem tarefas no Supabase. Adicione uma disciplina, sincronize com o Google Classroom ou carregue os dados de exemplo."
+        />
+      ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {columns.map((column) => {
             const colTasks = filteredTasks.filter(t => t.status === column.id);

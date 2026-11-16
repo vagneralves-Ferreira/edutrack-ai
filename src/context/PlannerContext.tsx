@@ -48,6 +48,9 @@ interface PlannerContextType {
   logStudyTime: (subjectId: string, minutes: number) => void;
   isNewTaskModalOpen: boolean;
   setIsNewTaskModalOpen: (open: boolean) => void;
+  isLoadingData: boolean;
+  loadError: string | null;
+  loadExampleData: () => Promise<void>;
   resetToDefault: () => void;
 }
 
@@ -224,24 +227,18 @@ function normalizeSubject(raw: any): Subject {
 
 function loadSubjectsFromStorage(userId?: string | null): Subject[] {
   const key = getScopedKey(STORAGE_KEYS.SUBJECTS, userId);
-  if (!key) return INITIAL_SUBJECTS;
+  if (!key) return [];
   try {
     const saved = localStorage.getItem(key);
     const candidate = saved ? JSON.parse(saved) : null;
 
     if (Array.isArray(candidate) && candidate.length > 0) {
-      const normalized = candidate.map(normalizeSubject);
-      const initialIds = INITIAL_SUBJECTS.map((s) => s.id);
-      const canonicalOrdered = INITIAL_SUBJECTS.map(
-        (initSub) => normalized.find((n) => n.id === initSub.id) || initSub
-      );
-      const customAdded = normalized.filter((n) => !initialIds.includes(n.id));
-      return [...canonicalOrdered, ...customAdded];
+      return candidate.map(normalizeSubject);
     }
   } catch (e) {
     console.error('Error loading subjects from localStorage', e);
   }
-  return INITIAL_SUBJECTS;
+  return [];
 }
 
 function persistSubjectsToStorage(subjectsList: Subject[], userId?: string | null) {
@@ -256,27 +253,23 @@ function persistSubjectsToStorage(subjectsList: Subject[], userId?: string | nul
 
 function loadTasksFromStorage(userId?: string | null): Task[] {
   const key = getScopedKey(STORAGE_KEYS.TASKS, userId);
-  if (!key) return INITIAL_TASKS;
+  if (!key) return [];
   const saved = localStorage.getItem(key);
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as Task[];
       if (Array.isArray(parsed)) {
         const sanitized = parsed.filter((t) => !isCorruptedCodeTask(t));
-        const missingCanonical = INITIAL_TASKS.filter(
-          (canon) => !sanitized.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
-        );
-        const restored = sanitized.length > 0 ? [...sanitized, ...missingCanonical] : INITIAL_TASKS;
-        if (sanitized.length !== parsed.length || missingCanonical.length > 0 || sanitized.length === 0) {
-          localStorage.setItem(key, JSON.stringify(restored));
+        if (sanitized.length !== parsed.length) {
+          localStorage.setItem(key, JSON.stringify(sanitized));
         }
-        return restored;
+        return sanitized;
       }
     } catch (e) {
       console.error('Error loading tasks from localStorage', e);
     }
   }
-  return INITIAL_TASKS;
+  return [];
 }
 
 function loadSyncMetaFromStorage(userId?: string | null): ClassroomSyncMetadata | null {
@@ -328,6 +321,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const studentName = currentUser?.name || studentNameState;
 
   const [tasks, setTasks] = useState<Task[]>(() => loadTasksFromStorage(userId));
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Limpa e recarrega o estado em memória quando o usuário faz logout ou troca de conta
   useEffect(() => {
@@ -339,22 +334,30 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedSubject(scopedSubs[0] || null);
     setTasks(scopedTasks);
     setLastClassroomSync(scopedSync);
+    setLoadError(null);
     setStudentNameState((nameKey && localStorage.getItem(nameKey)) || currentUser?.name || 'Estudante');
   }, [userId]);
 
-  // Sincronização inicial com o Supabase (SELECT nas tabelas subjects e tasks)
+  // Sincronização inicial com o Supabase (SELECT nas tabelas subjects e tasks — sem auto-seed ou fallback mock)
   useEffect(() => {
     if (!userId) return;
     if (fetchInFlightRef.current === userId) return;
     fetchInFlightRef.current = userId;
 
     const fetchFromSupabase = async () => {
+      setIsLoadingData(true);
+      setLoadError(null);
       try {
         // 1. Buscar disciplinas no Supabase
-        const { data: dbSubjects } = await supabase
+        const { data: dbSubjects, error: subjectsError } = await supabase
           .from('subjects')
           .select('*')
           .eq('user_id', userId);
+
+        if (subjectsError) {
+          setLoadError(`Erro ao carregar disciplinas: ${subjectsError.message}`);
+          return;
+        }
 
         // 2. Buscar tarefas no Supabase
         const { data: dbTasks, error: tasksError } = await supabase
@@ -363,7 +366,12 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .eq('user_id', userId)
           .order('created_at', { ascending: false });
 
-        // Reconciliação de disciplinas se existir usuário autenticado
+        if (tasksError) {
+          setLoadError(`Erro ao carregar tarefas: ${tasksError.message}`);
+          return;
+        }
+
+        // 3. Garante perfil e atualiza estado com os dados reais do banco (vazio se não houver registros)
         const { data: authData } = await supabase.auth.getUser();
         const authUserId = authData?.user?.id;
 
@@ -372,119 +380,45 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             {
               id: authUserId,
               nome: studentName,
-              curso: 'Ciência da Computação',
-              semestre_atual: '2026.2',
+              curso: currentUser?.course || 'Graduação',
+              semestre_atual: currentUser?.semester || '2026.2',
             },
             { onConflict: 'id' }
           );
-
-          const mappedDbSubjects: Subject[] = (dbSubjects || []).map(normalizeSubject);
-
-          const uniqueDbSubjects: Subject[] = [];
-          for (const dbSub of mappedDbSubjects) {
-            const alreadyAdded = uniqueDbSubjects.some(
-              (s) =>
-                s.name.toLowerCase() === dbSub.name.toLowerCase() ||
-                s.code.toLowerCase() === dbSub.code.toLowerCase()
-            );
-            if (!alreadyAdded) {
-              uniqueDbSubjects.push(dbSub);
-            }
-          }
-
-          const missingLocalSubjects: Subject[] = [];
-          for (const localSub of INITIAL_SUBJECTS) {
-            const existsInDb = uniqueDbSubjects.some(
-              (dbSub) =>
-                dbSub.name.toLowerCase() === localSub.name.toLowerCase() ||
-                dbSub.code.toLowerCase() === localSub.code.toLowerCase()
-            );
-            const alreadyQueued = missingLocalSubjects.some(
-              (m) =>
-                m.name.toLowerCase() === localSub.name.toLowerCase() ||
-                m.code.toLowerCase() === localSub.code.toLowerCase()
-            );
-            if (!existsInDb && !alreadyQueued) {
-              missingLocalSubjects.push(localSub);
-            }
-          }
-
-          if (missingLocalSubjects.length > 0) {
-            await supabase.from('subjects').insert(
-              missingLocalSubjects.map((sub) => ({
-                user_id: authUserId,
-                codigo: sub.code,
-                nome: sub.name,
-                professor: sub.professors?.[0] || 'Prof. Responsável',
-                carga_horaria_total: sub.totalHours || 80,
-              }))
-            );
-          }
-
-          const reconciledSubjects: Subject[] = [...uniqueDbSubjects, ...missingLocalSubjects];
-          setSubjects(reconciledSubjects);
-          persistSubjectsToStorage(reconciledSubjects, authUserId);
         }
 
-        if (tasksError) {
-          console.warn('Aviso ao consultar tasks no Supabase:', tasksError.message);
-          return;
+        const mappedDbSubjects: Subject[] = (dbSubjects || []).map(normalizeSubject);
+        const uniqueDbSubjects: Subject[] = [];
+        for (const dbSub of mappedDbSubjects) {
+          const alreadyAdded = uniqueDbSubjects.some(
+            (s) =>
+              s.name.toLowerCase() === dbSub.name.toLowerCase() ||
+              s.code.toLowerCase() === dbSub.code.toLowerCase()
+          );
+          if (!alreadyAdded) {
+            uniqueDbSubjects.push(dbSub);
+          }
         }
+
+        setSubjects(uniqueDbSubjects);
+        setSelectedSubject((prev) =>
+          prev && uniqueDbSubjects.some((s) => s.id === prev.id)
+            ? prev
+            : uniqueDbSubjects[0] || null
+        );
+        persistSubjectsToStorage(uniqueDbSubjects, userId);
 
         if (dbTasks && dbTasks.length > 0) {
-          const EXTRA_REMOVED_TITLES = new Set([
-            'modelagem relacional e normalização 3fn',
-            'laboratório prático: consultas com inner/left join e agregações',
-            'especificação openspec & auditoria das tarefas 01 a 15',
-            'lista de exercícios: álgebra relacional e integridade referencial',
-          ]);
-
-          const seenTitles = new Set<string>();
-          const duplicateIdsToDelete: string[] = [];
-          const uniqueRows: any[] = [];
-
-          for (const row of dbTasks) {
-            const titleKey = String(row.titulo || '').trim().toLowerCase();
-            if (!titleKey || EXTRA_REMOVED_TITLES.has(titleKey)) {
-              if (row.id) duplicateIdsToDelete.push(String(row.id));
-              continue;
-            }
-            if (seenTitles.has(titleKey)) {
-              if (row.id) duplicateIdsToDelete.push(String(row.id));
-              continue;
-            }
-            seenTitles.add(titleKey);
-            uniqueRows.push(row);
-          }
-
-          if (duplicateIdsToDelete.length > 0) {
-            await supabase.from('tasks').delete().in('id', duplicateIdsToDelete);
-          }
-
-          const mappedTasks: Task[] = uniqueRows.map((row: any) => {
-            const rowTitleLower = String(row.titulo || '').trim().toLowerCase();
-            const matchedCanonicalTask = INITIAL_TASKS.find(
-              (t) => t.title.toLowerCase() === rowTitleLower
-            );
-
-            if (matchedCanonicalTask) {
-              return {
-                ...matchedCanonicalTask,
-                id: String(row.id || matchedCanonicalTask.id),
-                status: (row.status as TaskStatus) || matchedCanonicalTask.status,
-                importedFromClassroom: true,
-              };
-            }
-
+          const mappedTasks: Task[] = dbTasks.map((row: any) => {
             const dbSub = dbSubjects?.find((s: any) => s.id === row.subject_id);
             const matchedLocalSub =
-              subjects.find(
+              uniqueDbSubjects.find(
                 (s) =>
                   s.id === row.subject_id ||
                   (dbSub &&
                     (s.name.toLowerCase() === String(dbSub.nome || '').toLowerCase() ||
                       s.code.toLowerCase() === String(dbSub.codigo || '').toLowerCase()))
-              ) || subjects[0];
+              ) || uniqueDbSubjects[0];
 
             const dateStr = row.data_entrega
               ? String(row.data_entrega).split('T')[0]
@@ -493,8 +427,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return {
               id: String(row.id),
               title: String(row.titulo || 'Tarefa'),
-              subjectId: matchedLocalSub ? matchedLocalSub.id : String(row.subject_id || 'sql-fundamentals'),
-              subjectName: matchedLocalSub ? matchedLocalSub.name : 'Disciplina',
+              subjectId: matchedLocalSub ? matchedLocalSub.id : String(row.subject_id || ''),
+              subjectName: matchedLocalSub ? matchedLocalSub.name : String(dbSub?.nome || 'Disciplina'),
               dueDate: dateStr,
               dueTime: '23:59',
               priority: (row.prioridade as Task['priority']) || 'media',
@@ -506,34 +440,26 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
           });
 
-          const corruptedIds = mappedTasks.filter(isCorruptedCodeTask).map((t) => t.id);
-          if (corruptedIds.length > 0) {
-            supabase.from('tasks').delete().in('id', corruptedIds).then(({ error }) => {
-              if (error) console.warn('Erro ao limpar tarefas inválidas do Supabase:', error.message);
-            });
-          }
-
           const cleanDbTasks = mappedTasks.filter((t) => !isCorruptedCodeTask(t));
-
-          const missingCanonical = INITIAL_TASKS.filter(
-            (canon) => !cleanDbTasks.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
-          );
-
-          const finalTasks = [...cleanDbTasks, ...missingCanonical];
-          setTasks(finalTasks);
+          setTasks(cleanDbTasks);
           const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
-          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(finalTasks));
+          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(cleanDbTasks));
+        } else {
+          setTasks([]);
+          const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify([]));
         }
-      } catch (err) {
-        console.warn('Conexão com Supabase em modo fallback local:', err);
+      } catch (err: any) {
+        setLoadError(err?.message || 'Erro ao conectar com o Supabase.');
       } finally {
+        setIsLoadingData(false);
         if (fetchInFlightRef.current === userId) {
           fetchInFlightRef.current = null;
         }
       }
     };
 
-    fetchFromSupabase();
+    void fetchFromSupabase();
   }, [userId]);
 
   // Função auxiliar para garantir vínculo de usuário e disciplina (UUID) no Supabase
@@ -926,9 +852,91 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
+  const loadExampleData = async () => {
+    if (!userId) return;
+    setIsLoadingData(true);
+    setLoadError(null);
+    try {
+      const { data: existingSubs } = await supabase
+        .from('subjects')
+        .select('id, nome, codigo')
+        .eq('user_id', userId);
+
+      const knownSubs = [...(existingSubs || [])];
+      const missingSubs = INITIAL_SUBJECTS.filter(
+        (initSub) =>
+          !knownSubs.some(
+            (s: any) =>
+              String(s.nome || '').toLowerCase() === initSub.name.toLowerCase() ||
+              String(s.codigo || '').toLowerCase() === initSub.code.toLowerCase()
+          )
+      );
+
+      if (missingSubs.length > 0) {
+        const { data: insertedSubs } = await supabase
+          .from('subjects')
+          .insert(
+            missingSubs.map((sub) => ({
+              user_id: userId,
+              codigo: sub.code,
+              nome: sub.name,
+              professor: sub.professors?.[0] || 'Prof. Responsável',
+              carga_horaria_total: sub.totalHours || 80,
+            }))
+          )
+          .select('id, nome, codigo');
+        if (Array.isArray(insertedSubs)) {
+          knownSubs.push(...insertedSubs);
+        }
+      }
+
+      const { data: existingTasks } = await supabase
+        .from('tasks')
+        .select('titulo')
+        .eq('user_id', userId);
+      const existingTitles = new Set(
+        (existingTasks || []).map((t: any) => String(t.titulo || '').trim().toLowerCase())
+      );
+
+      const tasksToInsert = INITIAL_TASKS.filter(
+        (t) => !existingTitles.has(t.title.trim().toLowerCase())
+      );
+
+      for (const task of tasksToInsert) {
+        const matchedSub = knownSubs.find(
+          (s: any) =>
+            String(s.nome || '').toLowerCase() === task.subjectName.toLowerCase()
+        );
+        if (matchedSub?.id) {
+          await supabase.from('tasks').insert({
+            subject_id: matchedSub.id,
+            user_id: userId,
+            titulo: task.title,
+            descricao: task.description || '',
+            data_entrega: task.dueDate ? new Date(task.dueDate).toISOString() : null,
+            status: task.status,
+            prioridade: task.priority,
+            importado_classroom: Boolean(task.importedFromClassroom),
+          });
+        }
+      }
+
+      setSubjects(INITIAL_SUBJECTS);
+      setSelectedSubject(INITIAL_SUBJECTS[0] || null);
+      persistSubjectsToStorage(INITIAL_SUBJECTS, userId);
+      setTasks(INITIAL_TASKS);
+      const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+      if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(INITIAL_TASKS));
+    } catch (err: any) {
+      setLoadError(err?.message || 'Erro ao carregar dados de exemplo.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   const resetToDefault = () => {
-    setSubjects(INITIAL_SUBJECTS);
-    setTasks(INITIAL_TASKS);
+    setSubjects([]);
+    setTasks([]);
     const subKey = getScopedKey(STORAGE_KEYS.SUBJECTS, userId);
     const taskKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
     if (subKey) localStorage.removeItem(subKey);
@@ -958,6 +966,9 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         logStudyTime,
         isNewTaskModalOpen,
         setIsNewTaskModalOpen,
+        isLoadingData,
+        loadError,
+        loadExampleData,
         resetToDefault,
       }}
     >
