@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, 
@@ -44,12 +45,58 @@ export const Header: React.FC = () => {
   const [tempName, setTempName] = useState(studentName);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentDateTime, setCurrentDateTime] = useState<string>(() => formatShortTime());
+  const [notifPos, setNotifPos] = useState<{ top: number; right: number }>({ top: 76, right: 16 });
+  const bellBtnRef = useRef<HTMLButtonElement | null>(null);
+  const notifPanelRef = useRef<HTMLDivElement | null>(null);
+  const [, setCurrentDateTime] = useState<string>(() => formatShortTime());
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentDateTime(formatShortTime()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!showNotifications) return;
+
+    const updatePos = () => {
+      if (!bellBtnRef.current) return;
+      const rect = bellBtnRef.current.getBoundingClientRect();
+      setNotifPos({
+        top: Math.round(rect.bottom + 8),
+        right: Math.max(12, Math.round(window.innerWidth - rect.right)),
+      });
+    };
+
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        notifPanelRef.current?.contains(target) ||
+        bellBtnRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowNotifications(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showNotifications]);
 
   const handleLogout = () => {
     setMobileMenuOpen(false);
@@ -183,9 +230,12 @@ export const Header: React.FC = () => {
           {/* Notifications Dropdown */}
           <div className="relative">
             <button
-              onClick={() => setShowNotifications(!showNotifications)}
+              ref={bellBtnRef}
+              type="button"
+              onClick={() => setShowNotifications((prev) => !prev)}
               className="relative p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-slate-300 hover:text-white transition-colors cursor-pointer"
               title="Avisos Acadêmicos"
+              aria-expanded={showNotifications}
             >
               <Bell className="w-4 h-4" />
               {criticalTasks.length > 0 && (
@@ -193,45 +243,64 @@ export const Header: React.FC = () => {
               )}
             </button>
 
-            {showNotifications && (
-              <div className="bento-card absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Pendentes no Classroom</h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold">
-                    {pendingTasksCount} pendentes
-                  </span>
-                </div>
-                <div className="py-2.5 space-y-2 max-h-64 overflow-y-auto">
-                  {tasks
-                    .filter((t) => t.status !== 'completed')
-                    .map((t) => (
-                      <div
-                        key={t.id}
-                        className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/25 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-1.5 text-violet-300 font-semibold mb-1">
-                          <span className="flex items-center gap-1.5 truncate">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{t.title}</span>
-                          </span>
-                          <span className="font-mono text-[10px] text-cyan-300 shrink-0">
-                            {t.dueDate.split('-').reverse().slice(0, 2).join('/')}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-300 leading-relaxed">
-                          {t.subjectName} • {t.description}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-                <button
-                  onClick={() => { setShowNotifications(false); setActiveTab('tarefas'); }}
-                  className="w-full mt-2 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-xs font-semibold text-violet-200 text-center transition-colors block cursor-pointer"
+            {showNotifications &&
+              createPortal(
+                <div
+                  ref={notifPanelRef}
+                  style={{ top: notifPos.top, right: notifPos.right }}
+                  className="bento-card fixed z-50 w-80 max-w-[calc(100vw-24px)] max-h-96 overflow-y-auto rounded-2xl shadow-2xl p-4 animate-in fade-in slide-in-from-top-2"
                 >
-                  Abrir Kanban de Tarefas
-                </button>
-              </div>
-            )}
+                  <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Avisos & Pendentes</h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold">
+                      {pendingTasksCount} pendentes
+                    </span>
+                  </div>
+                  <div className="py-2.5 space-y-2">
+                    {pendingTasksCount === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">Nenhum aviso</p>
+                    ) : (
+                      tasks
+                        .filter((t) => t.status !== 'completed')
+                        .map((t) => (
+                          <button
+                            type="button"
+                            key={t.id}
+                            onClick={() => {
+                              setShowNotifications(false);
+                              setActiveTab('tarefas');
+                            }}
+                            className="w-full text-left p-2.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 text-xs transition-colors cursor-pointer block"
+                          >
+                            <div className="flex items-center justify-between gap-1.5 text-violet-300 font-semibold mb-1">
+                              <span className="flex items-center gap-1.5 truncate">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">{t.title}</span>
+                              </span>
+                              <span className="font-mono text-[10px] text-cyan-300 shrink-0">
+                                {t.dueDate.split('-').reverse().slice(0, 2).join('/')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2">
+                              {t.subjectName} • {t.description}
+                            </p>
+                          </button>
+                        ))
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNotifications(false);
+                      setActiveTab('tarefas');
+                    }}
+                    className="w-full mt-2 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-xs font-semibold text-violet-200 text-center transition-colors block cursor-pointer"
+                  >
+                    Abrir Kanban de Tarefas
+                  </button>
+                </div>,
+                document.body
+              )}
           </div>
 
           {/* Student Profile + Editable Name + Logout */}
