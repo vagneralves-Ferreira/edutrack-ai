@@ -83,7 +83,7 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3 pb-2">
-      <div className="top-dock-shell max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-4 sm:px-5 h-16 flex items-center justify-between gap-4 transition-all">
+      <div className="top-dock-shell max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-3 sm:px-5 h-16 flex items-center justify-between gap-2 xl:gap-4 transition-all">
         
         {/* Left: Brand Identity + Impacta Pill */}
         <div className="flex items-center gap-3 shrink-0">
@@ -105,7 +105,7 @@ export const Header: React.FC = () => {
                   AI 2.0
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium hidden sm:block truncate max-w-[170px]">
+              <p className="text-[10px] text-slate-400 font-medium hidden 2xl:block truncate max-w-[150px]">
                 {currentUser?.institution || 'Minha Faculdade'} • {currentUser?.semester || '2026.2'}
               </p>
             </div>
@@ -113,7 +113,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Center: Floating Segmented Navigation Pills (Desktop) */}
-        <nav className="top-dock-nav hidden lg:flex items-center gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
+        <nav className="top-dock-nav hidden lg:flex items-center gap-0.5 xl:gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06] shrink-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -121,7 +121,7 @@ export const Header: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`relative flex items-center gap-1.5 px-2 xl:px-2.5 2xl:px-3 py-1.5 rounded-lg text-[11px] xl:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   isActive
                     ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
                     : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
@@ -131,7 +131,7 @@ export const Header: React.FC = () => {
                 <span>{item.label}</span>
                 {item.badge !== undefined && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full border font-bold ${
+                    className={`hidden 2xl:inline-flex text-[10px] px-1.5 py-0.2 rounded-full border font-bold ${
                       isActive
                         ? 'bg-black/30 text-white border-white/20'
                         : item.badgeColor
@@ -146,28 +146,29 @@ export const Header: React.FC = () => {
         </nav>
 
         {/* Right: Actions, Theme Toggle, Clock, Notifications, User Profile */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Google Classroom Sync Hub Button */}
           <button
             onClick={() => setIsClassroomModalOpen(true)}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+            className="hidden md:flex items-center gap-1.5 px-2.5 2xl:px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer shrink-0"
             title="Vincular e sincronizar todas as informações do Google Classroom"
           >
             <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Classroom</span>
+            <span className="hidden 2xl:inline">Classroom</span>
           </button>
 
           {/* Quick New Task Button */}
           <button
             onClick={() => setIsNewTaskModalOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-500/20 transition-all active:scale-95 cursor-pointer"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 2xl:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-500/20 transition-all active:scale-95 cursor-pointer shrink-0"
+            title="Nova Tarefa"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Nova Tarefa</span>
+            <span className="hidden 2xl:inline">Nova Tarefa</span>
           </button>
 
           {/* Compact Clock */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-[11px] font-mono text-slate-300">
+          <div className="hidden min-[1680px]:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-[11px] font-mono text-slate-300 shrink-0">
             <Clock className="w-3.5 h-3.5 text-cyan-400" />
             <span>{currentDateTime}</span>
           </div>
@@ -175,18 +176,18 @@ export const Header: React.FC = () => {
           {/* Theme Toggle Button (Light / Dark Mode) */}
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer shrink-0"
             title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
           >
             {theme === 'dark' ? (
               <>
                 <Sun className="w-4 h-4 text-amber-400" />
-                <span className="text-[11px] font-semibold hidden md:inline">Claro</span>
+                <span className="text-[11px] font-semibold hidden min-[1680px]:inline">Claro</span>
               </>
             ) : (
               <>
                 <Moon className="w-4 h-4 text-violet-600" />
-                <span className="text-[11px] font-semibold hidden md:inline">Escuro</span>
+                <span className="text-[11px] font-semibold hidden min-[1680px]:inline">Escuro</span>
               </>
             )}
           </button>
@@ -270,16 +271,16 @@ export const Header: React.FC = () => {
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-violet-500/30 to-cyan-500/30 border border-violet-400/30 flex items-center justify-center text-[11px] font-bold text-cyan-300">
                   {(currentUser?.name || studentName).slice(0, 2).toUpperCase()}
                 </div>
-                <span className="text-xs font-semibold text-slate-200 max-w-[110px] truncate">
+                <span className="hidden xl:inline text-xs font-semibold text-slate-200 max-w-[85px] 2xl:max-w-[110px] truncate">
                   {currentUser?.name || studentName}
                 </span>
-                <Edit2 className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Edit2 className="hidden xl:inline w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             )}
 
             <button
               onClick={handleLogout}
-              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer shrink-0"
               title="Sair da Conta (Logout)"
             >
               <LogOut className="w-3.5 h-3.5" />
