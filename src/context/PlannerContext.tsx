@@ -171,15 +171,15 @@ function normalizeSubject(raw: any): Subject {
   const rawProfs =
     Array.isArray(raw.professors) && raw.professors.length > 0
       ? raw.professors.map((p: string) =>
-          p.includes('Fábio e Mentores') ? 'Prof. Evandro' : p
+          p.includes('Fábio e Mentores') ? 'Prof. Evandro Victor Rocha Deliberal' : p
         )
       : raw.professor
-      ? [String(raw.professor).includes('Fábio e Mentores') ? 'Prof. Evandro' : String(raw.professor)]
+      ? [String(raw.professor).includes('Fábio e Mentores') ? 'Prof. Evandro Victor Rocha Deliberal' : String(raw.professor)]
       : matchedInitial?.professors || ['Prof. Responsável'];
 
   const profArray =
     matchedInitial?.id === 'innovation-lab' && rawProfs.some((p: string) => p.includes('Fábio'))
-      ? ['Prof. Evandro']
+      ? ['Prof. Evandro Victor Rocha Deliberal']
       : matchedInitial?.id === 'database-design' &&
         rawProfs.some((p: string) => p.includes('Evandro') || p.includes('Colegiado de Dados'))
       ? ['Prof. João Roberto Peres Ortega']
