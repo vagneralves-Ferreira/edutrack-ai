@@ -1,10 +1,15 @@
 import React from 'react';
 import { usePlanner } from '../context/PlannerContext';
 import { useTimer } from '../context/TimerContext';
+import { formatDateBR } from '../utils/helpers';
 import { Timer as TimerIcon, Play, Pause, RotateCcw, Check, Activity, Sparkles } from 'lucide-react';
 
 export const TimerView: React.FC = () => {
-  const { subjects, setActiveTab } = usePlanner();
+  const { subjects, tasks, setActiveTab } = usePlanner();
+  const nextPendingTasks = [...tasks]
+    .filter((t) => t.status !== 'completed')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 3);
   const {
     mode,
     setMode,
@@ -153,18 +158,21 @@ export const TimerView: React.FC = () => {
       </div>
 
       {/* Footer Info Card */}
-      <div className="p-4 rounded-2xl bento-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-        <span className="text-slate-400">
-          Precisa focar no Desafio da Procedure (07/11), Tarefas (19/11) ou na Entrega final do Projeto (23/11)?
-        </span>
-        <button
-          onClick={() => setActiveTab('ai-assistant')}
-          className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer flex items-center gap-1.5 shrink-0"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Abrir EduTrack AI Advisor &rarr;</span>
-        </button>
-      </div>
+      {nextPendingTasks.length > 0 && (
+        <div className="p-4 rounded-2xl bento-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <span className="text-slate-400">
+            Próximas entregas em foco:{' '}
+            {nextPendingTasks.map((t) => `${t.title} (${formatDateBR(t.dueDate)})`).join(', ')}.
+          </span>
+          <button
+            onClick={() => setActiveTab('ai-assistant')}
+            className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer flex items-center gap-1.5 shrink-0"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Abrir EduTrack AI Advisor &rarr;</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

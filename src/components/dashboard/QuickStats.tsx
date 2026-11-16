@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Subject, Task } from '../../types';
 import { BookCheck, TrendingUp, Clock, Flame } from 'lucide-react';
+import { formatDateBR } from '../../utils/helpers';
 
 interface QuickStatsProps {
   subjects: Subject[];
@@ -14,9 +15,16 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
 
   const totalStudyHours = subjects.reduce((sum, s) => sum + s.studyTimeHours, 0);
   const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
-  const pendingTasksCount = tasks.filter(t => t.status !== 'completed').length;
+  const pendingTasks = [...tasks]
+    .filter(t => t.status !== 'completed')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const pendingTasksCount = pendingTasks.length;
+  const upcomingDatesText =
+    pendingTasksCount > 0
+      ? `Prazos: ${pendingTasks.slice(0, 3).map(t => formatDateBR(t.dueDate)).join(', ')}`
+      : 'Nenhum prazo pendente';
   const taskCompletionPercent = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
-  const topSubject = subjects.length > 0
+  const topSubject = totalStudyHours > 0 && subjects.length > 0
     ? [...subjects].sort((a, b) => b.studyTimeHours - a.studyTimeHours)[0]
     : null;
 
@@ -34,7 +42,7 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
         <div className="my-2">
           <span className="text-2xl sm:text-3xl font-black text-white font-mono">{totalStudyHours}h</span>
           <span className="block text-[10px] text-cyan-300 font-medium mt-0.5 truncate">
-            Líder: {topSubject ? topSubject.name : 'SQL Fundamentals'}
+            {topSubject ? `Líder: ${topSubject.name}` : 'Nenhuma sessão registrada'}
           </span>
         </div>
       </div>
@@ -51,7 +59,7 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
         <div className="my-2">
           <span className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">{pendingTasksCount}</span>
           <span className="block text-[10px] text-rose-200/80 font-medium mt-0.5 truncate">
-            Prazos: 07/11, 19/11 e 23/11
+            {upcomingDatesText}
           </span>
         </div>
       </div>

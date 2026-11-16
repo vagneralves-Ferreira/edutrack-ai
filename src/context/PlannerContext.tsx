@@ -198,17 +198,15 @@ function normalizeSubject(raw: any): Subject {
     code: String(raw.code || raw.codigo || matchedInitial?.code || 'IMP-000'),
     name: String(raw.name || raw.nome || matchedInitial?.name || 'Disciplina'),
     professors: profArray,
-    progress: typeof raw.progress === 'number' ? raw.progress : (matchedInitial?.progress ?? 0),
+    progress: typeof raw.progress === 'number' ? raw.progress : 0,
     totalHours:
       typeof raw.totalHours === 'number'
         ? raw.totalHours
         : typeof raw.carga_horaria_total === 'number'
         ? raw.carga_horaria_total
         : (matchedInitial?.totalHours ?? 80),
-    completedHours:
-      typeof raw.completedHours === 'number' ? raw.completedHours : (matchedInitial?.completedHours ?? 0),
-    studyTimeHours:
-      typeof raw.studyTimeHours === 'number' ? raw.studyTimeHours : (matchedInitial?.studyTimeHours ?? 4),
+    completedHours: typeof raw.completedHours === 'number' ? raw.completedHours : 0,
+    studyTimeHours: typeof raw.studyTimeHours === 'number' ? raw.studyTimeHours : 0,
     color: raw.color || matchedInitial?.color || '#3b82f6',
     accentColor: raw.accentColor || matchedInitial?.accentColor || 'from-sky-500 to-blue-600',
     nextClass: raw.nextClass || matchedInitial?.nextClass || 'A definir • 19:15',
@@ -943,10 +941,26 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (taskKey) localStorage.removeItem(taskKey);
   };
 
+  const subjectsWithRealProgress = useMemo(() => {
+    return subjects.map((subj) => {
+      const subTasks = tasks.filter(
+        (t) =>
+          t.subjectId === subj.id ||
+          t.subjectName.toLowerCase() === subj.name.toLowerCase()
+      );
+      if (subTasks.length === 0) {
+        return { ...subj, progress: 0 };
+      }
+      const done = subTasks.filter((t) => t.status === 'completed').length;
+      const pct = Math.round((done / subTasks.length) * 100);
+      return { ...subj, progress: pct };
+    });
+  }, [subjects, tasks]);
+
   return (
     <PlannerContext.Provider
       value={{
-        subjects,
+        subjects: subjectsWithRealProgress,
         tasks,
         activeTab,
         setActiveTab,
