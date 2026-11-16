@@ -16,6 +16,7 @@ import { TimerView } from './views/TimerView';
 import { AiAssistantView } from './views/AiAssistantView';
 import { NewTaskModal } from './components/tasks/NewTaskModal';
 import { ClassroomSyncModal } from './components/classroom/ClassroomSyncModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase } from './lib/supabase';
 
 // Captura os parâmetros da URL antes do HashRouter modificar o hash
@@ -199,25 +200,27 @@ export default function App() {
                   onFinishRecovery={() => setIsRecoveryFlow(false)}
                 />
               ) : (
-                <Routes>
-                  {/* Public Authentication Screens */}
-                  <Route path="/login" element={<LoginView />} />
-                  <Route path="/cadastro" element={<RegisterView />} />
-                  <Route
-                    path="/reset-password"
-                    element={<ResetPasswordView onFinishRecovery={() => setIsRecoveryFlow(false)} />}
-                  />
+                <ErrorBoundary>
+                  <Routes>
+                    {/* Public Authentication Screens */}
+                    <Route path="/login" element={<LoginView />} />
+                    <Route path="/cadastro" element={<RegisterView />} />
+                    <Route
+                      path="/reset-password"
+                      element={<ResetPasswordView onFinishRecovery={() => setIsRecoveryFlow(false)} />}
+                    />
 
-                  {/* Protected Academic Modules */}
-                  <Route
-                    path="/*"
-                    element={
-                      <ProtectedRoute>
-                        <MainLayout />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Routes>
+                    {/* Protected Academic Modules */}
+                    <Route
+                      path="/*"
+                      element={
+                        <ProtectedRoute>
+                          <MainLayout />
+                        </ProtectedRoute>
+                      }
+                    />
+                  </Routes>
+                </ErrorBoundary>
               )}
             </TimerProvider>
           </PlannerProvider>

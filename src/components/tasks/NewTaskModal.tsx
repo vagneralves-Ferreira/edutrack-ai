@@ -7,7 +7,7 @@ export const NewTaskModal: React.FC = () => {
   const { isNewTaskModalOpen, setIsNewTaskModalOpen, subjects, addTask } = usePlanner();
 
   const [title, setTitle] = useState('');
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id || 'sql-fundamentals');
+  const [subjectId, setSubjectId] = useState(subjects?.[0]?.id ?? 'sql-fundamentals');
   const [dueDate, setDueDate] = useState('2026-11-15');
   const [dueTime, setDueTime] = useState('23:59');
   const [priority, setPriority] = useState<Priority>('alta');
@@ -15,13 +15,14 @@ export const NewTaskModal: React.FC = () => {
   const [isCriticalMvp, setIsCriticalMvp] = useState(false);
   const [scoreWeight, setScoreWeight] = useState('Peso 40%');
   const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Ensure selected subjectId always matches a valid subject from the dynamic dropdown list
   useEffect(() => {
-    if (isNewTaskModalOpen && subjects.length > 0) {
-      const exists = subjects.some((s) => s.id === subjectId);
+    if (isNewTaskModalOpen && (subjects?.length ?? 0) > 0) {
+      const exists = subjects.some((s) => s?.id === subjectId);
       if (!exists) {
-        setSubjectId(subjects[0].id);
+        setSubjectId(subjects[0]?.id ?? 'sql-fundamentals');
       }
     }
   }, [isNewTaskModalOpen, subjects, subjectId]);
@@ -49,19 +50,18 @@ export const NewTaskModal: React.FC = () => {
     }
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting || !title.trim()) return;
     setIsSubmitting(true);
 
-    const selectedSubject = subjects.find((s) => s.id === subjectId) || subjects[0];
+    const safeSubjects = subjects ?? [];
+    const selectedSubject = safeSubjects.find((s) => s?.id === subjectId) ?? safeSubjects[0];
 
     addTask({
       title: title.trim(),
-      subjectId: selectedSubject ? selectedSubject.id : subjectId,
-      subjectName: selectedSubject ? selectedSubject.name : 'SQL Fundamentals',
+      subjectId: selectedSubject?.id ?? subjectId ?? 'sql-fundamentals',
+      subjectName: selectedSubject?.name ?? 'Disciplina Padrão',
       dueDate: dueDate || '2026-11-15',
       dueTime,
       priority,
@@ -137,11 +137,17 @@ export const NewTaskModal: React.FC = () => {
                 onChange={(e) => setSubjectId(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer transition-all"
               >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-[#0e1320] text-white">
-                    {s.name}
+                {(subjects?.length ?? 0) > 0 ? (
+                  subjects.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#0e1320] text-white">
+                      {s.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="sql-fundamentals" className="bg-[#0e1320] text-white">
+                    Disciplina Padrão
                   </option>
-                ))}
+                )}
               </select>
             </div>
 
