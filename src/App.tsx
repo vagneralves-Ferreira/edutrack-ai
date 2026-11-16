@@ -17,7 +17,7 @@ import { AiAssistantView } from './views/AiAssistantView';
 import { NewTaskModal } from './components/tasks/NewTaskModal';
 import { ClassroomSyncModal } from './components/classroom/ClassroomSyncModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { supabase } from './lib/supabase';
+import { supabase, missingSupabaseEnv } from './lib/supabase';
 
 // Captura os parâmetros da URL antes do HashRouter modificar o hash
 const INITIAL_PATHNAME = window.location.pathname || '';
@@ -170,6 +170,8 @@ export default function App() {
       });
     }
 
+    if (missingSupabaseEnv.length > 0) return;
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
@@ -185,6 +187,21 @@ export default function App() {
       window.history.replaceState(null, '', '/' + (window.location.hash || '#/dashboard'));
     }
   }, []);
+
+  if (missingSupabaseEnv.length > 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="bento-card max-w-md w-full rounded-3xl p-7 text-center space-y-3 border border-rose-500/30">
+          <h2 className="text-lg font-extrabold text-white">
+            Configuração ausente: {missingSupabaseEnv.join(', ')}
+          </h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            As variáveis de ambiente do Supabase não foram definidas neste ambiente ({missingSupabaseEnv.join(', ')}). Configure-as na Vercel (Production e Preview) ou no arquivo <code>.env.local</code>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ThemeProvider>
