@@ -560,5 +560,47 @@ export const INITIAL_TASKS: Task[] = [
     isCriticalMvp: false,
     description: 'Atividade em grupo sobre principais diagramas da UML 2.5.',
     importedFromClassroom: true
+  },
+  {
+    id: 'classroom-7',
+    title: 'Atividades Práticas de Algoritmos',
+    subjectId: 'programming-algorithms',
+    subjectName: 'Programming & Algorithms',
+    dueDate: '2026-09-18',
+    dueTime: '23:59',
+    priority: 'media',
+    status: 'completed',
+    type: 'lista',
+    isCriticalMvp: false,
+    description: 'Entrega de exercícios sobre recursividade, ordenação e complexidade Big-O.',
+    importedFromClassroom: true
+  },
+  {
+    id: 'classroom-8',
+    title: 'Modelagem Conceitual & Normalização 3FN',
+    subjectId: 'database-design',
+    subjectName: 'Database Design',
+    dueDate: '2026-10-05',
+    dueTime: '23:59',
+    priority: 'alta',
+    status: 'completed',
+    type: 'projeto',
+    isCriticalMvp: false,
+    description: 'Diagrama Entidade-Relacionamento (DER) e aplicação das formas normais 1FN, 2FN e 3FN.',
+    importedFromClassroom: true
+  },
+  {
+    id: 'classroom-9',
+    title: 'Laboratório de Consultas SQL com JOINs',
+    subjectId: 'sql-fundamentals',
+    subjectName: 'SQL Fundamentals',
+    dueDate: '2026-10-12',
+    dueTime: '23:59',
+    priority: 'media',
+    status: 'completed',
+    type: 'exercicio',
+    isCriticalMvp: false,
+    description: 'Resolução de consultas DML com INNER, LEFT JOIN, GROUP BY e HAVING.',
+    importedFromClassroom: true
   }
 ];

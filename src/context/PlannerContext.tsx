@@ -5,7 +5,11 @@ import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import confetti from 'canvas-confetti';
-import { buildFullClassroomImpactaSync, type ClassroomSyncResult } from '../services/classroomSync';
+import {
+  buildFullClassroomImpactaSync,
+  isCorruptedCodeTask,
+  type ClassroomSyncResult,
+} from '../services/classroomSync';
 
 export interface ClassroomSyncMetadata {
   timestamp: string;
@@ -291,7 +295,18 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const saved = localStorage.getItem(STORAGE_KEYS.TASKS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as Task[];
+        if (Array.isArray(parsed)) {
+          const sanitized = parsed.filter((t) => !isCorruptedCodeTask(t));
+          const missingCanonical = INITIAL_TASKS.filter(
+            (canon) => !sanitized.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
+          );
+          const restored = sanitized.length > 0 ? [...sanitized, ...missingCanonical] : INITIAL_TASKS;
+          if (sanitized.length !== parsed.length || missingCanonical.length > 0 || sanitized.length === 0) {
+            localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(restored));
+          }
+          return restored;
+        }
       } catch (e) {
         console.error('Error loading tasks from localStorage', e);
       }
@@ -447,11 +462,20 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
           });
 
+          const corruptedIds = mappedTasks.filter(isCorruptedCodeTask).map((t) => t.id);
+          if (corruptedIds.length > 0) {
+            supabase.from('tasks').delete().in('id', corruptedIds).then(({ error }) => {
+              if (error) console.warn('Erro ao limpar tarefas inválidas do Supabase:', error.message);
+            });
+          }
+
+          const cleanDbTasks = mappedTasks.filter((t) => !isCorruptedCodeTask(t));
+
           const missingCanonical = INITIAL_TASKS.filter(
-            (canon) => !mappedTasks.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
+            (canon) => !cleanDbTasks.some((m) => m.title.toLowerCase() === canon.title.toLowerCase())
           );
 
-          const finalTasks = [...mappedTasks, ...missingCanonical];
+          const finalTasks = [...cleanDbTasks, ...missingCanonical];
           setTasks(finalTasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(finalTasks));
         }

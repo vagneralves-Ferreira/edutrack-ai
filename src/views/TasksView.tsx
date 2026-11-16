@@ -13,7 +13,8 @@ import {
   List, 
   Trash2,
   RefreshCw,
-  BookMarked
+  BookMarked,
+  GraduationCap
 } from 'lucide-react';
 import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } from '../utils/helpers';
 import { AiDica } from '../components/AiDica';
@@ -264,6 +265,10 @@ export const TasksView: React.FC = () => {
                       const matchedSubject = subjects.find((s) => s.id === task.subjectId);
                       const subjectColor = matchedSubject?.color || '#38bdf8';
                       const subjectDisplayName = matchedSubject?.name || task.subjectName;
+                      const professorLabel =
+                        matchedSubject?.professors && matchedSubject.professors.length > 0
+                          ? matchedSubject.professors.join(', ')
+                          : null;
 
                       return (
                         <div
@@ -320,6 +325,13 @@ export const TasksView: React.FC = () => {
                           <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
                             {task.description}
                           </p>
+
+                          {professorLabel && (
+                            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-300 font-medium">
+                              <GraduationCap className="w-3 h-3 text-violet-400 shrink-0" />
+                              <span className="truncate">{professorLabel}</span>
+                            </div>
+                          )}
 
                           {/* Due Date & Urgency */}
                           <div className="mt-3 pt-2.5 border-t border-white/[0.05] flex items-center justify-between text-[10px]">

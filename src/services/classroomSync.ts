@@ -573,6 +573,39 @@ function parsePortugueseDate(text: string): string | null {
   return null;
 }
 
+const CODE_LINE_PATTERNS = [
+  /^\s*(var|const|let|function|return|import|export|class|try|catch|finally|for|while|switch|if|else)\b/i,
+  /^\s*(\/\/|\/\*|\*\/|[{}[\]();.,]+)\s*$/,
+  /^\s*<\/?[a-z][\w-]*[\s>]/i,
+  /Classroom\.Courses|ContentService\.createTextOutput|function\s+doGet\s*\(|setMimeType\(|new\s+Date\(\)\.toISOString\(\)/i,
+  /=>\s*\{|\|\|\s*\[\s*\]\s*;|\}\s*\)\s*;?\s*$/,
+  /^\s*(course|teachers|topics|courseWork|submissions|materials|announcements|generatedAt|courses)\s*:\s*[a-zA-Z0-9_.()[\]\s]+,?\s*$/i,
+  /^\s*[a-z_$][\w$]*\s*:\s*[a-z_$][\w$]*\s*,\s*$/i,
+];
+
+export function isCodeSnippetLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  return CODE_LINE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+export function isCorruptedCodeTask(task: Pick<Task, 'title'>): boolean {
+  return isCodeSnippetLine(task.title || '');
+}
+
+function looksLikeSourceCode(rawContent: string): boolean {
+  if (/Classroom\.Courses\.list|ContentService\.createTextOutput|function\s+doGet\s*\(/i.test(rawContent)) {
+    return true;
+  }
+  const nonEmptyLines = rawContent
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (nonEmptyLines.length === 0) return false;
+  const codeLines = nonEmptyLines.filter(isCodeSnippetLine).length;
+  return codeLines >= 2 && codeLines / nonEmptyLines.length >= 0.25;
+}
+
 /**
  * Interpreta texto colado diretamente da página do Google Classroom ("Pendentes" / "Atividades" / "Turmas")
  * ou JSON exportado do Google Takeout e converte em disciplinas e tarefas do EduTrack AI.
@@ -585,6 +618,12 @@ export function parseClassroomPastedContent(
   const trimmed = rawContent.trim();
   if (!trimmed) {
     throw new Error('Cole o conteúdo copiado do Google Classroom ou um JSON válido.');
+  }
+
+  if (looksLikeSourceCode(trimmed)) {
+    throw new Error(
+      'O texto colado parece ser código JavaScript/Apps Script, não a lista de atividades. Para importar por texto, abra o Google Classroom na aba "Atividades" ou "Pendentes", copie o conteúdo da página (Ctrl+A → Ctrl+C) e cole aqui.'
+    );
   }
 
   const baseSync = buildFullClassroomImpactaSync(existingSubjects);
@@ -695,7 +734,7 @@ export function parseClassroomPastedContent(
       continue;
     }
 
-    if (NOISE_LINE_REGEX.test(line)) {
+    if (NOISE_LINE_REGEX.test(line) || isCodeSnippetLine(line)) {
       continue;
     }
 
