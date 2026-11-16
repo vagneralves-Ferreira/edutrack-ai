@@ -179,6 +179,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (window.location.pathname !== '/' && !window.location.search.includes('code=')) {
+      window.history.replaceState(null, '', '/' + (window.location.hash || '#/dashboard'));
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <HashRouter>
