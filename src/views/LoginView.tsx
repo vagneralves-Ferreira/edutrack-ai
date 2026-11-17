@@ -149,15 +149,6 @@ export const LoginView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-4 sm:p-6 relative">
-      {/* Floating Theme Toggle on Desktop Login Screen */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="hidden sm:flex !fixed top-5 right-5 z-50 items-center gap-2 px-3.5 py-2 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
-      >
-        {themeToggleContent}
-      </button>
-
       <div className="w-full max-w-4xl">
         <div className="relative z-10 w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
@@ -199,18 +190,20 @@ export const LoginView: React.FC = () => {
 
         {/* Right Login Form */}
         <div className="lg:col-span-6 p-6 sm:p-10 flex flex-col justify-center">
-          <div className="mb-6 flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
-              <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
-            </div>
+          <div className="mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
+            {/* Theme toggle lives inside the login card on every screen size. */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="sm:hidden shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
+              aria-label={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
             >
               {themeToggleContent}
             </button>
+          </div>
+          <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
