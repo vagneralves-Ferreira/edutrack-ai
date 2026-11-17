@@ -18,15 +18,29 @@ import {
   Check,
   Link2,
 } from 'lucide-react';
-import { usePlanner } from '../../context/PlannerContext';
+import { usePlanner, type CourseResolution, type ClassroomApplySummary } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   fetchGoogleClassroomFullData,
   fetchGoogleAppsScriptClassroom,
   APPS_SCRIPT_BRIDGE_CODE,
-  buildFullClassroomImpactaSync,
   parseClassroomPastedContent,
+  type ClassroomSyncResult,
 } from '../../services/classroomSync';
+import { findMatchingSubject } from '../../services/classroomImport';
+import type { Subject } from '../../types';
+
+function describeSummary(summary: ClassroomApplySummary): string {
+  const parts = [
+    `${summary.inserted} nova(s) atividade(s)`,
+    `${summary.updated} já existente(s) atualizada(s), sem duplicar`,
+  ];
+  if (summary.subjectsCreated > 0) parts.push(`${summary.subjectsCreated} disciplina(s) criada(s)`);
+  if (summary.ignoredCourses > 0) {
+    parts.push(`${summary.ignoredCourses} turma(s) ignorada(s) (${summary.skippedTasks} atividade(s) não importada(s))`);
+  }
+  return `Importação concluída: ${parts.join(' • ')}.`;
+}
 
 const CLASSROOM_SCOPES = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
@@ -47,9 +61,10 @@ export const ClassroomSyncModal: React.FC = () => {
     lastClassroomSync,
   } = usePlanner();
 
-  const [activeMode, setActiveMode] = useState<
-    'apps_script' | 'paste_import' | 'google_api' | 'full_impacta'
-  >('apps_script');
+  const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('apps_script');
+  /** Result waiting for the "Turmas novas" review (classes that match no registered subject). */
+  const [pendingResult, setPendingResult] = useState<ClassroomSyncResult | null>(null);
+  const [resolutions, setResolutions] = useState<Record<string, CourseResolution>>({});
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(
     () => (userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '')
   );
@@ -61,7 +76,6 @@ export const ClassroomSyncModal: React.FC = () => {
     () => (userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '')
   );
   const [pastedText, setPastedText] = useState<string>('');
-  const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -73,30 +87,60 @@ export const ClassroomSyncModal: React.FC = () => {
     setGoogleClientId(userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '');
     setErrorMsg(null);
     setSuccessMsg(null);
+    setPendingResult(null);
+    setResolutions({});
   }, [userId]);
 
   if (!isClassroomModalOpen) return null;
 
-  const handleFullImpactaSync = async () => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
+  const countTasks = (result: ClassroomSyncResult, draftId: string) =>
+    result.tasks.filter((t) => t.subjectId === draftId).length;
+
+  const autoMatches = (result: ClassroomSyncResult) =>
+    result.subjects.map((draft) => ({ draft, match: findMatchingSubject(draft, subjects) as Subject | null }));
+
+  /** Writes the result; throws are shown in the modal. */
+  const runApply = async (result: ClassroomSyncResult, chosen: Record<string, CourseResolution>) => {
     setIsLoading(true);
-    setStepStatus('Conectando ao Google Workspace • Faculdade Impacta...');
-
-    setTimeout(() => {
-      setStepStatus('Importando Turmas, Professores, Materiais de Aula e Mural...');
-    }, 650);
-
-    setTimeout(async () => {
-      setStepStatus('Sincronizando Atividades, Avaliações, Notas e Prazos com Supabase...');
-      const result = buildFullClassroomImpactaSync(subjects);
-      await applyClassroomSyncResult(result);
+    setStepStatus('Salvando atividades no Supabase (sem duplicar)...');
+    try {
+      const summary = await applyClassroomSyncResult(result, chosen);
+      setPendingResult(null);
+      setResolutions({});
+      setSuccessMsg(describeSummary(summary));
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Erro ao salvar as atividades do Classroom.');
+    } finally {
       setIsLoading(false);
-      setSuccessMsg(
-        `Sincronização concluída! ${result.stats.coursesCount} disciplinas, ${result.stats.tasksCount} atividades do Classroom, ${result.stats.materialsCount} materiais/avisos e ${result.stats.evaluationsCount} avaliações abastecidas no EduTrack AI.`
-      );
-    }, 1400);
+    }
   };
+
+  /**
+   * Classes that match a registered subject are linked automatically. If any class is new, stop and show the
+   * "Turmas novas" review (default: create the subject) before writing anything.
+   */
+  const processResult = async (result: ClassroomSyncResult) => {
+    const matches = autoMatches(result);
+    const unmatched = matches.filter((m) => !m.match);
+    if (unmatched.length === 0) {
+      await runApply(result, {});
+      return;
+    }
+    const defaults: Record<string, CourseResolution> = {};
+    for (const { draft } of unmatched) defaults[draft.id] = { action: 'create' };
+    setResolutions(defaults);
+    setPendingResult(result);
+    setIsLoading(false);
+  };
+
+  const handleResolutionChange = (draftId: string, value: string) => {
+    const next: CourseResolution =
+      value === 'create' ? { action: 'create' } : value === 'ignore' ? { action: 'ignore' } : { action: 'link', subjectId: value };
+    setResolutions((prev) => ({ ...prev, [draftId]: next }));
+  };
+
+  const resolutionValue = (r?: CourseResolution) =>
+    !r || r.action === 'create' ? 'create' : r.action === 'ignore' ? 'ignore' : r.subjectId;
 
   const handleCopyAppsScript = async () => {
     try {
@@ -126,12 +170,7 @@ export const ClassroomSyncModal: React.FC = () => {
     try {
       if (userId) localStorage.setItem(`edutrack_apps_script_url_${userId}`, cleanUrl);
       const result = await fetchGoogleAppsScriptClassroom(cleanUrl);
-      setStepStatus('Atualizando disciplinas, todas as entregas e Cockpit no EduTrack AI...');
-      await applyClassroomSyncResult(result);
-      setIsLoading(false);
-      setSuccessMsg(
-        `Classroom conectado! ${result.stats.coursesCount} turmas, ${result.stats.tasksCount} atividades/entregas, ${result.stats.materialsCount} materiais e ${result.stats.announcementsCount} avisos sincronizados.`
-      );
+      await processResult(result);
     } catch (err: any) {
       setIsLoading(false);
       setErrorMsg(err?.message || 'Erro ao conectar com o Web App do Google Apps Script.');
@@ -154,12 +193,7 @@ export const ClassroomSyncModal: React.FC = () => {
     try {
       if (userId) localStorage.setItem(`edutrack_google_classroom_token_${userId}`, token);
       const result = await fetchGoogleClassroomFullData(token);
-      setStepStatus('Salvando disciplinas, materiais, notas e atividades no EduTrack AI...');
-      await applyClassroomSyncResult(result);
-      setIsLoading(false);
-      setSuccessMsg(
-        `Conectado à API oficial! ${result.stats.coursesCount} turmas, ${result.stats.tasksCount} atividades, ${result.stats.materialsCount} materiais e ${result.stats.announcementsCount} avisos do mural importados em tempo real.`
-      );
+      await processResult(result);
     } catch (err: any) {
       setIsLoading(false);
       setErrorMsg(err?.message || 'Não foi possível conectar à API do Google Classroom.');
@@ -235,13 +269,8 @@ export const ClassroomSyncModal: React.FC = () => {
     try {
       setIsLoading(true);
       setStepStatus('Analisando atividades, turmas e prazos informados...');
-      const result = parseClassroomPastedContent(pastedText, subjects, replaceExisting);
-      await applyClassroomSyncResult(result);
-      setIsLoading(false);
-      setPastedText('');
-      setSuccessMsg(
-        `Importação concluída! ${result.stats.coursesCount} disciplinas e ${result.stats.tasksCount} atividades do Classroom abastecidas no EduTrack AI.`
-      );
+      const result = parseClassroomPastedContent(pastedText, subjects);
+      await processResult(result);
     } catch (err: any) {
       setIsLoading(false);
       setErrorMsg(err?.message || 'Erro ao processar os dados informados.');
@@ -359,27 +388,93 @@ export const ClassroomSyncModal: React.FC = () => {
             <KeyRound className="w-3.5 h-3.5" />
             <span>3. API Google (Token OAuth)</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveMode('full_impacta');
-              setErrorMsg(null);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'full_impacta'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>4. Modelo Exemplo (Impacta)</span>
-          </button>
         </div>
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          {activeMode === 'apps_script' && (
+          {pendingResult && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3" data-testid="classroom-review">
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                  Turmas novas ({autoMatches(pendingResult).filter((m) => !m.match).length})
+                </h4>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  Estas turmas do Classroom não correspondem a nenhuma disciplina cadastrada. Escolha o que fazer com
+                  cada uma antes de importar.
+                </p>
+              </div>
+
+              <ul className="space-y-2">
+                {autoMatches(pendingResult)
+                  .filter((m) => !m.match)
+                  .map(({ draft }) => (
+                    <li
+                      key={draft.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{draft.name}</p>
+                        <p className="text-[11px] text-slate-400">{countTasks(pendingResult, draft.id)} atividade(s)</p>
+                      </div>
+                      <select
+                        aria-label={`O que fazer com a turma ${draft.name}`}
+                        value={resolutionValue(resolutions[draft.id])}
+                        onChange={(e) => handleResolutionChange(draft.id, e.target.value)}
+                        className="sm:w-64 bg-white/[0.04] border border-white/[0.12] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500"
+                      >
+                        <option value="create">Criar disciplina</option>
+                        {subjects.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            Vincular a {s.name}
+                          </option>
+                        ))}
+                        <option value="ignore">Ignorar</option>
+                      </select>
+                    </li>
+                  ))}
+              </ul>
+
+              {autoMatches(pendingResult).some((m) => m.match) && (
+                <div className="text-[11px] text-slate-400">
+                  <p className="font-semibold text-slate-300">Vinculadas automaticamente:</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {autoMatches(pendingResult)
+                      .filter((m) => m.match)
+                      .map(({ draft, match }) => (
+                        <li key={draft.id}>
+                          {draft.name} → {match!.name} ({countTasks(pendingResult, draft.id)} atividade(s))
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => runApply(pendingResult, resolutions)}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Importar atividades</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setPendingResult(null);
+                    setResolutions({});
+                  }}
+                  className="sm:w-40 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-semibold text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!pendingResult && activeMode === 'apps_script' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -457,72 +552,7 @@ export const ClassroomSyncModal: React.FC = () => {
             </div>
           )}
 
-          {activeMode === 'full_impacta' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-200 leading-relaxed">
-                <strong>Atenção:</strong> Esta aba carrega o <strong>modelo base salvo no aplicativo</strong> (não lê automaticamente entregas novas da sua conta Google Classroom). Para importar todas as 15+ entregas de Innovation Lab e seus avisos reais, use a aba <strong>1. Tempo Real (Apps Script)</strong> ou <strong>2. Colar do Classroom (Ctrl+A)</strong>.
-              </div>
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-cyan-400">
-                  O que existe no modelo base Impacta:
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
-                    <BookOpen className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white">5 Disciplinas do Classroom</p>
-                      <p className="text-slate-400 text-[11px] mt-0.5">
-                        SQL Fundamentals, Programming & Algorithms, Database Design, Innovation Lab e Software Engineering.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
-                    <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white">6 Atividades Oficiais do Classroom</p>
-                      <p className="text-slate-400 text-[11px] mt-0.5">
-                        Desafio da Procedure (07/11), Tarefas a serem realizadas (19/11), Entrega final do Projeto (23/11), Avaliação Parcial 02 (21/10), TA: Uso do Modelo Cascata (22/08) e Dinâmica Modelos de Desenvolvimento (02/09).
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
-                    <FileText className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white">Materiais & Avisos do Mural</p>
-                      <p className="text-slate-400 text-[11px] mt-0.5">
-                        Apostilas, slides, links do Google Drive e comunicados dos professores em cada disciplina.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start gap-2.5">
-                    <GraduationCap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white">Avaliações, Pesos & Notas</p>
-                      <p className="text-slate-400 text-[11px] mt-0.5">
-                        Cronograma de provas parciais, pesos e notas sincronizados com o Cockpit e Supabase.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={handleFullImpactaSync}
-                className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 disabled:opacity-60 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>
-                  {isLoading
-                    ? 'Sincronizando todas as informações...'
-                    : 'Vincular e Abastecer Todas as Informações do Classroom Agora'}
-                </span>
-              </button>
-            </div>
-          )}
-
-          {activeMode === 'google_api' && (
+          {!pendingResult && activeMode === 'google_api' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -586,7 +616,7 @@ export const ClassroomSyncModal: React.FC = () => {
             </div>
           )}
 
-          {activeMode === 'paste_import' && (
+          {!pendingResult && activeMode === 'paste_import' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -610,15 +640,6 @@ export const ClassroomSyncModal: React.FC = () => {
                   placeholder="Abra seu Google Classroom -> Atividades ou Pendentes -> copie (Ctrl+C) e cole (Ctrl+V) aqui..."
                   className="w-full bg-black/40 border border-white/[0.1] rounded-xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                 />
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={replaceExisting}
-                    onChange={(e) => setReplaceExisting(e.target.checked)}
-                    className="rounded border-white/20 bg-black/40 text-violet-500 focus:ring-violet-500"
-                  />
-                  <span>Substituir tarefas atuais do Classroom para corresponder exatamente ao texto colado</span>
-                </label>
                 <button
                   type="button"
                   disabled={isLoading}

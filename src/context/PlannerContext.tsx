@@ -6,11 +6,28 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { isInnovationLabSubject } from '../utils/helpers';
 import confetti from 'canvas-confetti';
+import { isCorruptedCodeTask, type ClassroomSyncResult } from '../services/classroomSync';
 import {
-  buildFullClassroomImpactaSync,
-  isCorruptedCodeTask,
-  type ClassroomSyncResult,
-} from '../services/classroomSync';
+  findMatchingSubject,
+  normalizeText,
+  planClassroomTaskWrites,
+  type ExistingTaskRow,
+  type IncomingClassroomTask,
+} from '../services/classroomImport';
+
+/** What to do with one Classroom class when importing (chosen in the "Turmas novas" review). */
+export type CourseResolution =
+  | { action: 'create' }
+  | { action: 'link'; subjectId: string }
+  | { action: 'ignore' };
+
+export interface ClassroomApplySummary {
+  inserted: number;
+  updated: number;
+  subjectsCreated: number;
+  ignoredCourses: number;
+  skippedTasks: number;
+}
 
 export interface ClassroomSyncMetadata {
   timestamp: string;
@@ -39,8 +56,10 @@ interface PlannerContextType {
   setStudentName: (name: string) => void;
   addSubject: (subjectData: NewSubjectInput) => Subject;
   addTask: (task: Omit<Task, 'id'>) => void;
-  importClassroomTasks: () => number;
-  applyClassroomSyncResult: (result: ClassroomSyncResult) => Promise<void>;
+  applyClassroomSyncResult: (
+    result: ClassroomSyncResult,
+    resolutions?: Record<string, CourseResolution>
+  ) => Promise<ClassroomApplySummary>;
   isClassroomModalOpen: boolean;
   setIsClassroomModalOpen: (open: boolean) => void;
   lastClassroomSync: ClassroomSyncMetadata | null;
@@ -68,106 +87,6 @@ const STORAGE_KEYS = {
 function getScopedKey(base: string, userId?: string | null): string | null {
   return userId ? `${base}_${userId}` : null;
 }
-
-const CLASSROOM_MOCK_TASKS: Task[] = [
-  {
-    id: 'classroom-1',
-    title: 'Desafio da Procedure',
-    subjectId: 'sql-fundamentals',
-    subjectName: 'SQL Fundamentals',
-    dueDate: '2026-11-07',
-    dueTime: '23:59',
-    priority: 'alta',
-    status: 'todo',
-    type: 'exercicio',
-    isCriticalMvp: false,
-    description: 'Atividade importada do mural do professor Evandro.',
-    importedFromClassroom: true,
-  },
-  {
-    id: 'classroom-2',
-    title: 'Tarefas a serem realizadas',
-    subjectId: 'innovation-lab',
-    subjectName: 'Innovation Lab: Advanced No/Low Code',
-    dueDate: '2026-11-19',
-    dueTime: '23:59',
-    priority: 'media',
-    status: 'todo',
-    type: 'lista',
-    isCriticalMvp: false,
-    description: 'Realizar o upload das tarefas (Markdown e Docs).',
-    importedFromClassroom: true,
-  },
-  {
-    id: 'classroom-3',
-    title: 'Entrega final do Projeto',
-    subjectId: 'innovation-lab',
-    subjectName: 'Innovation Lab: Advanced No/Low Code',
-    dueDate: '2026-11-23',
-    dueTime: '23:59',
-    priority: 'alta',
-    status: 'in_progress',
-    type: 'avaliacao_mvp',
-    isCriticalMvp: true,
-    description: 'Sincronizado do Classroom. Entrega do MVP.',
-    importedFromClassroom: true,
-  },
-  {
-    id: 'classroom-4',
-    title: 'Avaliação Parcial 02',
-    subjectId: 'software-engineering',
-    subjectName: 'Software Engineering',
-    dueDate: '2026-10-21',
-    dueTime: '23:59',
-    priority: 'alta',
-    status: 'completed',
-    type: 'avaliacao',
-    isCriticalMvp: false,
-    description: 'Avaliação sobre os modelos de desenvolvimento.',
-    importedFromClassroom: true,
-  },
-  {
-    id: 'classroom-5',
-    title: 'TA: Uso do Modelo Cascata',
-    subjectId: 'software-engineering',
-    subjectName: 'Software Engineering',
-    dueDate: '2026-08-22',
-    dueTime: '23:59',
-    priority: 'media',
-    status: 'completed',
-    type: 'projeto',
-    isCriticalMvp: false,
-    description: 'Trabalho prático sobre as fases do Modelo Cascata.',
-    importedFromClassroom: true,
-  },
-  {
-    id: 'classroom-6',
-    title: 'Dinâmica Modelos de Desenvolvimento',
-    subjectId: 'software-engineering',
-    subjectName: 'Software Engineering',
-    dueDate: '2026-09-02',
-    dueTime: '23:59',
-    priority: 'baixa',
-    status: 'completed',
-    type: 'exercicio',
-    isCriticalMvp: false,
-    description: 'Atividade em grupo sobre principais diagramas da UML 2.5.',
-    importedFromClassroom: true,
-  },
-];
-
-const LEGACY_TASK_IDS = new Set([
-  'task-mvp-01',
-  'task-mvp-02',
-  'task-mvp-03',
-  'task-04',
-  'task-05',
-  'task-06',
-  'task-07',
-  'task-08',
-  'task-09',
-  'task-10',
-]);
 
 function normalizeSubject(raw: any): Subject {
   const matchedInitial = INITIAL_SUBJECTS.find(
@@ -282,6 +201,78 @@ function loadSyncMetaFromStorage(userId?: string | null): ClassroomSyncMetadata 
   }
 }
 
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+function dedupeDbSubjects(dbSubjects: any[]): Subject[] {
+  const unique: Subject[] = [];
+  for (const dbSub of dbSubjects.map(normalizeSubject)) {
+    const alreadyAdded = unique.some(
+      (s) => s.name.toLowerCase() === dbSub.name.toLowerCase() || s.code.toLowerCase() === dbSub.code.toLowerCase()
+    );
+    if (!alreadyAdded) unique.push(dbSub);
+  }
+  return unique;
+}
+
+function mapDbTasks(dbTasks: any[], dbSubjects: any[], localSubjects: Subject[]): Task[] {
+  return dbTasks
+    .map((row: any): Task => {
+      const dbSub = dbSubjects.find((s: any) => s.id === row.subject_id);
+      const matchedLocalSub =
+        localSubjects.find(
+          (s) =>
+            s.id === row.subject_id ||
+            (dbSub &&
+              (s.name.toLowerCase() === String(dbSub.nome || '').toLowerCase() ||
+                s.code.toLowerCase() === String(dbSub.codigo || '').toLowerCase()))
+        ) || localSubjects[0];
+
+      const dateStr = row.data_entrega
+        ? String(row.data_entrega).split('T')[0]
+        : new Date().toISOString().split('T')[0];
+
+      return {
+        id: String(row.id),
+        title: String(row.titulo || 'Tarefa'),
+        subjectId: matchedLocalSub ? matchedLocalSub.id : String(row.subject_id || ''),
+        subjectName: matchedLocalSub ? matchedLocalSub.name : String(dbSub?.nome || 'Disciplina'),
+        dueDate: dateStr,
+        dueTime: '23:59',
+        priority: (row.prioridade as Task['priority']) || 'media',
+        status: (row.status as TaskStatus) || 'todo',
+        type: 'exercicio',
+        isCriticalMvp: false,
+        description: row.descricao || '',
+        importedFromClassroom: Boolean(row.importado_classroom),
+        classroomId: row.classroom_id || undefined,
+      };
+    })
+    .filter((t) => !isCorruptedCodeTask(t));
+}
+
+/** Turns a Supabase error on public.tasks into an actionable message (most likely: migration not applied yet). */
+function explainTasksError(message: string): string {
+  if (/classroom_id/i.test(message) || /no unique or exclusion constraint/i.test(message)) {
+    return 'O banco ainda não tem a coluna tasks.classroom_id. Rode a migration supabase/migrations/20261116000000_add_classroom_id_to_tasks.sql no SQL Editor do Supabase e tente de novo.';
+  }
+  return `Erro ao salvar as atividades no Supabase: ${message}`;
+}
+
+/** Adds Classroom materials/evaluations/topics to a subject without dropping what it already had. */
+function mergeClassroomSubjectData(target: Subject, fromClassroom: Subject): Subject {
+  const mergeById = <T extends { id: string }>(a: T[] = [], b: T[] = []) => [
+    ...a,
+    ...b.filter((item) => !a.some((x) => x.id === item.id)),
+  ];
+  return {
+    ...target,
+    materials: mergeById(target.materials, fromClassroom.materials),
+    evaluations: mergeById(target.evaluations, fromClassroom.evaluations),
+    topics: target.topics?.length ? target.topics : fromClassroom.topics,
+    modules: target.modules?.length ? target.modules : fromClassroom.modules,
+  };
+}
+
 export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -322,6 +313,39 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [tasks, setTasks] = useState<Task[]>(() => loadTasksFromStorage(userId));
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  /** Replaces subjects/tasks in state (and the local cache) with rows read from Supabase. */
+  const applyDbSnapshot = (dbSubjects: any[], dbTasks: any[], extraSubjectData?: Map<string, Subject>) => {
+    let uniqueDbSubjects = dedupeDbSubjects(dbSubjects);
+    if (extraSubjectData && extraSubjectData.size > 0) {
+      uniqueDbSubjects = uniqueDbSubjects.map((s) => {
+        const extra = extraSubjectData.get(normalizeText(s.name));
+        return extra ? mergeClassroomSubjectData(s, extra) : s;
+      });
+    }
+    setSubjects(uniqueDbSubjects);
+    setSelectedSubject((prev) =>
+      prev && uniqueDbSubjects.some((s) => s.id === prev.id) ? prev : uniqueDbSubjects[0] || null
+    );
+    persistSubjectsToStorage(uniqueDbSubjects, userId);
+
+    const cleanDbTasks = mapDbTasks(dbTasks, dbSubjects, uniqueDbSubjects);
+    setTasks(cleanDbTasks);
+    const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
+    if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(cleanDbTasks));
+  };
+
+  const fetchDbRows = async (uid: string) => {
+    const { data: dbSubjects, error: subjectsError } = await supabase.from('subjects').select('*').eq('user_id', uid);
+    if (subjectsError) throw new Error(`Erro ao carregar disciplinas: ${subjectsError.message}`);
+    const { data: dbTasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (tasksError) throw new Error(`Erro ao carregar tarefas: ${tasksError.message}`);
+    return { dbSubjects: dbSubjects || [], dbTasks: dbTasks || [] };
+  };
 
   // Limpa e recarrega o estado em memória quando o usuário faz logout ou troca de conta
   useEffect(() => {
@@ -386,68 +410,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           );
         }
 
-        const mappedDbSubjects: Subject[] = (dbSubjects || []).map(normalizeSubject);
-        const uniqueDbSubjects: Subject[] = [];
-        for (const dbSub of mappedDbSubjects) {
-          const alreadyAdded = uniqueDbSubjects.some(
-            (s) =>
-              s.name.toLowerCase() === dbSub.name.toLowerCase() ||
-              s.code.toLowerCase() === dbSub.code.toLowerCase()
-          );
-          if (!alreadyAdded) {
-            uniqueDbSubjects.push(dbSub);
-          }
-        }
-
-        setSubjects(uniqueDbSubjects);
-        setSelectedSubject((prev) =>
-          prev && uniqueDbSubjects.some((s) => s.id === prev.id)
-            ? prev
-            : uniqueDbSubjects[0] || null
-        );
-        persistSubjectsToStorage(uniqueDbSubjects, userId);
-
-        if (dbTasks && dbTasks.length > 0) {
-          const mappedTasks: Task[] = dbTasks.map((row: any) => {
-            const dbSub = dbSubjects?.find((s: any) => s.id === row.subject_id);
-            const matchedLocalSub =
-              uniqueDbSubjects.find(
-                (s) =>
-                  s.id === row.subject_id ||
-                  (dbSub &&
-                    (s.name.toLowerCase() === String(dbSub.nome || '').toLowerCase() ||
-                      s.code.toLowerCase() === String(dbSub.codigo || '').toLowerCase()))
-              ) || uniqueDbSubjects[0];
-
-            const dateStr = row.data_entrega
-              ? String(row.data_entrega).split('T')[0]
-              : new Date().toISOString().split('T')[0];
-
-            return {
-              id: String(row.id),
-              title: String(row.titulo || 'Tarefa'),
-              subjectId: matchedLocalSub ? matchedLocalSub.id : String(row.subject_id || ''),
-              subjectName: matchedLocalSub ? matchedLocalSub.name : String(dbSub?.nome || 'Disciplina'),
-              dueDate: dateStr,
-              dueTime: '23:59',
-              priority: (row.prioridade as Task['priority']) || 'media',
-              status: (row.status as TaskStatus) || 'todo',
-              type: 'exercicio',
-              isCriticalMvp: false,
-              description: row.descricao || '',
-              importedFromClassroom: Boolean(row.importado_classroom),
-            };
-          });
-
-          const cleanDbTasks = mappedTasks.filter((t) => !isCorruptedCodeTask(t));
-          setTasks(cleanDbTasks);
-          const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
-          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(cleanDbTasks));
-        } else {
-          setTasks([]);
-          const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
-          if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify([]));
-        }
+        applyDbSnapshot(dbSubjects || [], dbTasks || []);
       } catch (err: any) {
         setLoadError(err?.message || 'Erro ao conectar com o Supabase.');
       } finally {
@@ -662,139 +625,161 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     })();
   };
 
-  const applyClassroomSyncResult = async (result: ClassroomSyncResult): Promise<void> => {
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-    try {
-    // 1. Atualiza todas as disciplinas (com materiais, módulos, professores, avaliações e progresso)
-    setSubjects(result.subjects);
-    persistSubjectsToStorage(result.subjects, userId);
-    if (result.subjects.length > 0) {
-      setSelectedSubject((prev) => {
-        if (!prev) return result.subjects[0];
-        return result.subjects.find((s) => s.id === prev.id) || result.subjects[0];
-      });
+  const applyClassroomSyncResult = async (
+    result: ClassroomSyncResult,
+    resolutions: Record<string, CourseResolution> = {}
+  ): Promise<ClassroomApplySummary> => {
+    if (syncInFlightRef.current) {
+      throw new Error('Já existe uma sincronização em andamento. Aguarde ela terminar.');
     }
-
-    // 2. Atualiza todas as tarefas mantendo tarefas manuais do aluno
-    setTasks((prev) => {
-      const manualTasks = prev.filter((t) => !t.importedFromClassroom && !LEGACY_TASK_IDS.has(t.id));
-      const merged = [...result.tasks, ...manualTasks];
-      const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
-      if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(merged));
-      return merged;
-    });
-
-    // 3. Salva metadados da sincronização
-    const meta: ClassroomSyncMetadata = {
-      timestamp: new Date().toLocaleString('pt-BR'),
-      coursesCount: result.stats.coursesCount,
-      tasksCount: result.stats.tasksCount,
-      materialsCount: result.stats.materialsCount,
-      evaluationsCount: result.stats.evaluationsCount,
-      announcementsCount: result.stats.announcementsCount,
-      source: result.source,
-    };
-    setLastClassroomSync(meta);
-    const syncKey = getScopedKey(STORAGE_KEYS.SYNC_META, userId);
-    if (syncKey) localStorage.setItem(syncKey, JSON.stringify(meta));
-
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.65 },
-      colors: ['#34a853', '#4285f4', '#fbbc05', '#8b5cf6'],
-    });
-
-    // 4. Sincroniza disciplinas e tarefas com o Supabase sem duplicar
+    syncInFlightRef.current = true;
     try {
       const { data: authData } = await supabase.auth.getUser();
       const uid = authData?.user?.id;
-      if (uid) {
-        const { data: existingSubs } = await supabase
+      if (!uid) throw new Error('Sessão expirada. Entre novamente para importar do Classroom.');
+
+      // 1. Resolve every Classroom class to a subject UUID in public.subjects (link / create / ignore).
+      const { data: existingSubs, error: subsError } = await supabase
+        .from('subjects')
+        .select('id, nome, codigo')
+        .eq('user_id', uid);
+      if (subsError) throw new Error(`Erro ao ler disciplinas: ${subsError.message}`);
+      const knownSubs: { id: string; nome: string; codigo: string }[] = [...(existingSubs || [])];
+
+      const findDbSubject = (name?: string, code?: string) =>
+        knownSubs.find(
+          (s) =>
+            (name && normalizeText(s.nome) === normalizeText(name)) ||
+            (code && String(s.codigo || '').toLowerCase() === code.toLowerCase())
+        );
+
+      const insertDbSubject = async (draft: Subject) => {
+        const { data: inserted, error } = await supabase
           .from('subjects')
+          .insert({
+            user_id: uid,
+            codigo: draft.code,
+            nome: draft.name,
+            professor: draft.professors.join(', ') || 'Prof. Responsável',
+            carga_horaria_total: draft.totalHours || 80,
+          })
           .select('id, nome, codigo')
-          .eq('user_id', uid);
+          .single();
+        if (error || !inserted) throw new Error(`Erro ao criar a disciplina "${draft.name}": ${error?.message}`);
+        knownSubs.push(inserted);
+        return inserted;
+      };
 
-        const knownSubs = [...(existingSubs || [])];
-        const findSubjectUuid = (code?: string, name?: string): string | null => {
-          const hit = knownSubs.find(
-            (s: any) =>
-              (name && String(s.nome || '').toLowerCase() === name.toLowerCase()) ||
-              (code && String(s.codigo || '').toLowerCase() === code.toLowerCase())
-          );
-          return hit?.id || null;
-        };
+      const draftToUuid = new Map<string, string | null>();
+      const classroomDataBySubjectName = new Map<string, Subject>();
+      let subjectsCreated = 0;
+      let ignoredCourses = 0;
 
-        for (const subj of result.subjects) {
-          if (!findSubjectUuid(subj.code, subj.name)) {
-            const { data: inserted } = await supabase
-              .from('subjects')
-              .insert({
-                user_id: uid,
-                codigo: subj.code,
-                nome: subj.name,
-                professor: subj.professors.join(', '),
-                carga_horaria_total: subj.totalHours,
-              })
-              .select('id, nome, codigo')
-              .limit(1);
-            if (Array.isArray(inserted) && inserted[0]) {
-              knownSubs.push(inserted[0]);
-            }
-          }
+      for (const draft of result.subjects) {
+        const auto = findMatchingSubject(draft, subjects);
+        const resolution: CourseResolution =
+          resolutions[draft.id] || (auto ? { action: 'link', subjectId: auto.id } : { action: 'create' });
+
+        if (resolution.action === 'ignore') {
+          draftToUuid.set(draft.id, null);
+          ignoredCourses++;
+          continue;
         }
 
-        // Remove tarefas anteriores importadas do Classroom para evitar duplicidade
-        await supabase
-          .from('tasks')
-          .delete()
-          .eq('user_id', uid)
-          .eq('importado_classroom', true);
-
-        for (const clsTask of result.tasks) {
-          const matchedSub = result.subjects.find(
-            (s) => s.id === clsTask.subjectId || s.name.toLowerCase() === clsTask.subjectName.toLowerCase()
-          );
-          let subjectUuid = findSubjectUuid(matchedSub?.code, clsTask.subjectName);
-          if (!subjectUuid) {
-            const ids = await resolveSupabaseIds(clsTask.subjectId, clsTask.subjectName);
-            subjectUuid = ids?.subjectUuid || null;
-          }
-          if (subjectUuid) {
-            await supabase.from('tasks').insert({
-              subject_id: subjectUuid,
-              user_id: uid,
-              titulo: clsTask.title,
-              descricao: clsTask.description || '',
-              data_entrega: clsTask.dueDate ? new Date(clsTask.dueDate).toISOString() : null,
-              status: clsTask.status,
-              prioridade: clsTask.priority,
-              importado_classroom: true,
-            });
+        let dbSub: { id: string; nome: string; codigo: string } | undefined;
+        if (resolution.action === 'link') {
+          const local = subjects.find((s) => s.id === resolution.subjectId);
+          if (!local) throw new Error(`A disciplina escolhida para "${draft.name}" não foi encontrada.`);
+          dbSub = knownSubs.find((s) => s.id === local.id) || findDbSubject(local.name, local.code);
+          if (!dbSub) dbSub = await insertDbSubject(local);
+        } else {
+          // "Criar disciplina": reuse a subject with the same name if one already exists in the database.
+          dbSub = findDbSubject(draft.name);
+          if (!dbSub) {
+            dbSub = await insertDbSubject(draft);
+            subjectsCreated++;
           }
         }
+        draftToUuid.set(draft.id, dbSub.id);
+        classroomDataBySubjectName.set(normalizeText(dbSub.nome), draft);
       }
-    } catch (e) {
-      console.warn('Erro ao sincronizar pacote completo do Classroom com Supabase:', e);
-    }
+
+      // 2. Upsert the activities by their stable Classroom key (no deletes, no duplicates).
+      const incoming: IncomingClassroomTask[] = [];
+      let skippedTasks = 0;
+      for (const task of result.tasks) {
+        const subjectUuid = draftToUuid.get(task.subjectId);
+        if (!subjectUuid) {
+          skippedTasks++;
+          continue;
+        }
+        incoming.push({
+          classroomId: task.classroomId,
+          title: task.title,
+          description: task.description || '',
+          dueDate: task.dueDate,
+          priority: task.priority,
+          turnedIn: task.turnedIn,
+          subjectUuid,
+        });
+      }
+
+      const { data: existingRows, error: rowsError } = await supabase
+        .from('tasks')
+        .select('id, classroom_id, titulo, subject_id, status, prioridade, importado_classroom, descricao, data_entrega')
+        .eq('user_id', uid);
+      if (rowsError) throw new Error(explainTasksError(rowsError.message));
+
+      const plan = planClassroomTaskWrites(uid, incoming, (existingRows || []) as ExistingTaskRow[]);
+      if (plan.updates.length > 0) {
+        const { error } = await supabase.from('tasks').upsert(plan.updates, { onConflict: 'id' });
+        if (error) throw new Error(explainTasksError(error.message));
+      }
+      if (plan.inserts.length > 0) {
+        const { error } = await supabase.from('tasks').upsert(plan.inserts, { onConflict: 'user_id,classroom_id' });
+        if (error) throw new Error(explainTasksError(error.message));
+      }
+
+      // 3. Reload from the database so every card carries its real UUID.
+      const { dbSubjects, dbTasks } = await fetchDbRows(uid);
+      applyDbSnapshot(dbSubjects, dbTasks, classroomDataBySubjectName);
+
+      const meta: ClassroomSyncMetadata = {
+        timestamp: new Date().toLocaleString('pt-BR'),
+        coursesCount: result.subjects.length - ignoredCourses,
+        tasksCount: incoming.length,
+        materialsCount: result.stats.materialsCount,
+        evaluationsCount: result.stats.evaluationsCount,
+        announcementsCount: result.stats.announcementsCount,
+        source: result.source,
+      };
+      setLastClassroomSync(meta);
+      const syncKey = getScopedKey(STORAGE_KEYS.SYNC_META, userId);
+      if (syncKey) localStorage.setItem(syncKey, JSON.stringify(meta));
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.65 },
+        colors: ['#34a853', '#4285f4', '#fbbc05', '#8b5cf6'],
+      });
+
+      return {
+        inserted: plan.inserts.length,
+        updated: plan.updates.length,
+        subjectsCreated,
+        ignoredCourses,
+        skippedTasks,
+      };
     } finally {
       syncInFlightRef.current = false;
     }
   };
 
-  const importClassroomTasks = (): number => {
-    const fullResult = buildFullClassroomImpactaSync(subjects);
-    void applyClassroomSyncResult(fullResult);
-    return fullResult.tasks.length;
-  };
-
   const updateTaskStatus = (id: string, status: TaskStatus) => {
-    let taskTitle = '';
     setTasks((prev) =>
       prev.map((task) => {
         if (task.id === id) {
-          taskTitle = task.title;
           if (status === 'completed' && task.status !== 'completed') {
             confetti({
               particleCount: 70,
@@ -809,14 +794,14 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
     );
 
-    // Atualiza o status da tarefa no Supabase
+    // Updates the row by its UUID only (never by title, which could hit another task with the same name).
     (async () => {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        if (isUuid) {
-          await supabase.from('tasks').update({ status }).eq('id', id);
-        } else if (taskTitle) {
-          await supabase.from('tasks').update({ status }).eq('titulo', taskTitle);
+        if (isUuid(id) && userId) {
+          const { error } = await supabase.from('tasks').update({ status }).eq('id', id).eq('user_id', userId);
+          if (error) console.warn('Erro ao atualizar status no Supabase:', error.message);
+        } else {
+          console.warn('Tarefa ainda sem id do banco; status não foi salvo no Supabase:', id);
         }
       } catch (e) {
         console.warn('Erro ao atualizar status no Supabase:', e);
@@ -825,17 +810,14 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const deleteTask = (id: string) => {
-    const targetTask = tasks.find((t) => t.id === id);
     setTasks((prev) => prev.filter((task) => task.id !== id));
 
-    // Remove a tarefa do Supabase
+    // Deletes the row by its UUID only (never by title, which could delete every task with the same name).
     (async () => {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        if (isUuid) {
-          await supabase.from('tasks').delete().eq('id', id);
-        } else if (targetTask?.title) {
-          await supabase.from('tasks').delete().eq('titulo', targetTask.title);
+        if (isUuid(id) && userId) {
+          const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', userId);
+          if (error) console.warn('Erro ao excluir tarefa no Supabase:', error.message);
         }
       } catch (e) {
         console.warn('Erro ao excluir tarefa no Supabase:', e);
@@ -929,17 +911,15 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             data_entrega: task.dueDate ? new Date(task.dueDate).toISOString() : null,
             status: task.status,
             prioridade: task.priority,
-            importado_classroom: Boolean(task.importedFromClassroom),
+            // Sample data is never flagged as a Classroom import.
+            importado_classroom: false,
           });
         }
       }
 
-      setSubjects(INITIAL_SUBJECTS);
-      setSelectedSubject(INITIAL_SUBJECTS[0] || null);
-      persistSubjectsToStorage(INITIAL_SUBJECTS, userId);
-      setTasks(INITIAL_TASKS);
-      const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
-      if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(INITIAL_TASKS));
+      // Reload from the database so the sample cards carry real UUIDs (status changes then persist).
+      const { dbSubjects, dbTasks } = await fetchDbRows(userId);
+      applyDbSnapshot(dbSubjects, dbTasks);
     } catch (err: any) {
       setLoadError(err?.message || 'Erro ao carregar dados de exemplo.');
     } finally {
@@ -985,7 +965,6 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setStudentName,
         addSubject,
         addTask,
-        importClassroomTasks,
         applyClassroomSyncResult,
         isClassroomModalOpen,
         setIsClassroomModalOpen,

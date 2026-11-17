@@ -44,11 +44,15 @@ CREATE TABLE IF NOT EXISTS public.tasks (
   status TEXT NOT NULL DEFAULT 'todo',
   prioridade TEXT NOT NULL DEFAULT 'media',
   importado_classroom BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Stable Google Classroom key (gc:<courseId>:<courseWorkId>, json:..., paste:<hash>); NULL for manual tasks.
+  -- See supabase/migrations/20261116000000_add_classroom_id_to_tasks.sql
+  classroom_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_subject_id ON public.tasks(subject_id);
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_user_id_classroom_id_key ON public.tasks (user_id, classroom_id);
 
 -- =============================================================================
 -- 4. SEGURANÇA: ROW LEVEL SECURITY (RLS) E POLICIES

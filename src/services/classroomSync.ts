@@ -9,11 +9,23 @@ import type {
   TaskStatus,
   TaskType,
 } from '../types';
-import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
+import { pastedTaskKey, normalizeText } from './classroomImport';
+
+/** A Classroom activity ready to become a Kanban card. `subjectId` points to a course draft in `subjects`. */
+export interface ClassroomTaskDraft extends Task {
+  /** Stable dedupe key stored in tasks.classroom_id (gc:<courseId>:<workId>, json:..., paste:<hash>). */
+  classroomId: string;
+  /** Classroom reports the work as turned in or returned. */
+  turnedIn: boolean;
+}
 
 export interface ClassroomSyncResult {
+  /**
+   * One draft per Classroom class. These are NOT the user's subjects: each draft is matched to a registered
+   * subject, created, or ignored when the result is applied (see the "Turmas novas" review in the modal).
+   */
   subjects: Subject[];
-  tasks: Task[];
+  tasks: ClassroomTaskDraft[];
   stats: {
     coursesCount: number;
     tasksCount: number;
@@ -21,7 +33,31 @@ export interface ClassroomSyncResult {
     evaluationsCount: number;
     announcementsCount: number;
   };
-  source: 'google_api' | 'apps_script' | 'custom_import' | 'impacta_full';
+  source: 'google_api' | 'apps_script' | 'custom_import';
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toLocalDateString = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/**
+ * Classroom's dueDate/dueTime are in UTC (an activity due 23:59 in São Paulo is 02:59 UTC on the next day),
+ * so convert them to the browser's local date and time.
+ */
+export function resolveClassroomDue(work: any, now: Date = new Date()): { dueDate: string; dueTime: string } {
+  const dd = work?.dueDate;
+  if (dd?.year) {
+    const month = (dd.month || 1) - 1;
+    const day = dd.day || 1;
+    const t = work.dueTime;
+    if (t && (typeof t.hours === 'number' || typeof t.minutes === 'number')) {
+      const local = new Date(Date.UTC(dd.year, month, day, t.hours || 0, t.minutes || 0));
+      return { dueDate: toLocalDateString(local), dueTime: `${pad2(local.getHours())}:${pad2(local.getMinutes())}` };
+    }
+    return { dueDate: `${dd.year}-${pad2(month + 1)}-${pad2(day)}`, dueTime: '23:59' };
+  }
+  // No due date in Classroom: use the publication date so the card still sorts sensibly.
+  const created = work?.creationTime ? new Date(work.creationTime) : now;
+  return { dueDate: toLocalDateString(isNaN(created.getTime()) ? now : created), dueTime: '23:59' };
 }
 
 export interface RawCourseBundle {
@@ -113,7 +149,7 @@ export function buildSyncResultFromCourseBundles(
   source: 'google_api' | 'apps_script'
 ): ClassroomSyncResult {
   const syncedSubjects: Subject[] = [];
-  const syncedTasks: Task[] = [];
+  const syncedTasks: ClassroomTaskDraft[] = [];
   let totalMaterials = 0;
   let totalEvaluations = 0;
   let totalAnnouncements = 0;
@@ -126,12 +162,8 @@ export function buildSyncResultFromCourseBundles(
     const courseSection = course.section ? String(course.section) : '';
     const palette = SUBJECT_PALETTES[i % SUBJECT_PALETTES.length];
 
-    const matchedInit = INITIAL_SUBJECTS.find(
-      (s) =>
-        courseName.toLowerCase().includes(s.name.toLowerCase()) ||
-        s.name.toLowerCase().includes(courseName.toLowerCase())
-    );
-    const subjectId = matchedInit ? matchedInit.id : `classroom-subj-${slugify(courseName)}-${courseId.slice(-4)}`;
+    // Course draft id; the real subject is resolved against the user's own subjects when applying.
+    const subjectId = `gc-course:${courseId}`;
 
     const rawTeachers = Array.isArray(bundle.teachers) ? bundle.teachers : [];
     const teachersList: string[] = rawTeachers
@@ -140,22 +172,16 @@ export function buildSyncResultFromCourseBundles(
       .map((name: string) => (name.toLowerCase().startsWith('prof') ? name : `Prof. ${name}`));
 
     const rawTopics: any[] = Array.isArray(bundle.topics) ? bundle.topics : [];
-    const topicNames =
-      rawTopics.length > 0
-        ? rawTopics.map((t: any) => String(t.name))
-        : matchedInit?.topics || ['Conteúdo Programático sincronizado via Google Classroom'];
+    const topicNames = rawTopics.map((t: any) => String(t.name));
 
-    const modules: SubjectModule[] =
-      rawTopics.length > 0
-        ? rawTopics.map((t: any, idx: number) => ({
-            id: `mod-${courseId}-${t.topicId || idx}`,
-            number: idx + 1,
-            title: String(t.name),
-            hours: Math.round(80 / Math.max(1, rawTopics.length)),
-            description: `Tópico oficial importado da turma ${courseName} no Google Classroom.`,
-            topics: [String(t.name)],
-          }))
-        : matchedInit?.modules || [];
+    const modules: SubjectModule[] = rawTopics.map((t: any, idx: number) => ({
+      id: `mod-${courseId}-${t.topicId || idx}`,
+      number: idx + 1,
+      title: String(t.name),
+      hours: Math.round(80 / Math.max(1, rawTopics.length)),
+      description: `Tópico oficial importado da turma ${courseName} no Google Classroom.`,
+      topics: [String(t.name)],
+    }));
 
     const submissionMap = new Map<string, any>();
     for (const sub of bundle.submissions || []) {
@@ -174,34 +200,19 @@ export function buildSyncResultFromCourseBundles(
       const workDesc = String(work.description || 'Atividade sincronizada diretamente do Google Classroom.');
       const sub = submissionMap.get(workId);
 
-      let status: TaskStatus = 'todo';
-      if (sub?.state === 'TURNED_IN' || sub?.state === 'RETURNED') {
-        status = 'completed';
-        completedWorkCount++;
-      } else if (sub?.state === 'CREATED' || sub?.state === 'RECLAIMED_BY_STUDENT') {
-        status = 'in_progress';
-      }
+      // Only "turned in"/"returned" changes the Kanban status; CREATED is just "assigned, not turned in yet".
+      const turnedIn = sub?.state === 'TURNED_IN' || sub?.state === 'RETURNED';
+      const status: TaskStatus = turnedIn ? 'completed' : 'todo';
+      if (turnedIn) completedWorkCount++;
 
-      let dueDate = '2026-11-30';
-      let dueTime = '23:59';
-      if (work.dueDate && work.dueDate.year) {
-        const y = String(work.dueDate.year);
-        const m = String(work.dueDate.month || 1).padStart(2, '0');
-        const d = String(work.dueDate.day || 1).padStart(2, '0');
-        dueDate = `${y}-${m}-${d}`;
-      } else if (work.creationTime) {
-        dueDate = String(work.creationTime).slice(0, 10);
-      }
-      if (work.dueTime && typeof work.dueTime.hours === 'number') {
-        const hh = String(work.dueTime.hours).padStart(2, '0');
-        const mm = String(work.dueTime.minutes || 0).padStart(2, '0');
-        dueTime = `${hh}:${mm}`;
-      }
+      const { dueDate, dueTime } = resolveClassroomDue(work);
 
       const inferred = inferTaskType(workTitle, workDesc);
 
       syncedTasks.push({
         id: `classroom-${courseId}-${workId}`,
+        classroomId: `gc:${courseId}:${workId}`,
+        turnedIn,
         title: workTitle,
         subjectId,
         subjectName: courseName,
@@ -227,7 +238,7 @@ export function buildSyncResultFromCourseBundles(
         evaluations.push({
           id: `eval-${courseId}-${workId}`,
           name: workTitle,
-          date: dd && mm ? `${dd}/${mm}/${yyyy || '2026'}` : yyyy || '2026',
+          date: dd && mm ? `${dd}/${mm}/${yyyy}` : yyyy,
           weight: work.maxPoints ? Math.min(100, Number(work.maxPoints)) : 25,
           status: status === 'completed' ? 'completed' : 'pending',
           grade: assignedGrade,
@@ -329,39 +340,32 @@ export function buildSyncResultFromCourseBundles(
     }
 
     const totalWork = courseWorkList.length;
-    const progress =
-      totalWork > 0 ? Math.round((completedWorkCount / totalWork) * 100) : matchedInit?.progress ?? 65;
-    const totalHours = matchedInit?.totalHours ?? 80;
+    const progress = totalWork > 0 ? Math.round((completedWorkCount / totalWork) * 100) : 0;
+    const totalHours = 80;
     const completedHours = Math.round((progress / 100) * totalHours);
 
     syncedSubjects.push({
       id: subjectId,
-      code: courseSection || matchedInit?.code || `CLS-${courseId.slice(-3)}`,
+      code: courseSection || `CLS-${courseId.slice(-4)}`,
       name: courseName,
-      professors:
-        matchedInit?.professors?.length
-          ? matchedInit.professors
-          : teachersList.length > 0
-          ? teachersList
-          : ['Prof. Impacta'],
+      professors: teachersList.length > 0 ? teachersList : ['Prof. Responsável'],
       progress,
       totalHours,
       completedHours,
-      studyTimeHours: matchedInit?.studyTimeHours ?? Math.max(4, Math.round(completedHours * 0.35)),
-      color: matchedInit?.color || palette.color,
-      accentColor: matchedInit?.accentColor || palette.accentColor,
-      nextClass: course.room ? `${course.room} • 19:15` : matchedInit?.nextClass || 'Google Classroom • 19:15',
-      schedule: courseSection ? `${courseSection} • 19:15 - 22:00` : matchedInit?.schedule || 'Semestre 2026.2 • 19:15 - 22:00',
-      room: course.room || matchedInit?.room || 'Google Classroom / Impacta',
+      studyTimeHours: 0,
+      color: palette.color,
+      accentColor: palette.accentColor,
+      nextClass: course.room ? `${course.room} • 19:15` : 'Google Classroom',
+      schedule: courseSection ? `${courseSection}` : 'Google Classroom',
+      room: course.room || 'Google Classroom',
       description:
         course.descriptionHeading ||
         course.description ||
-        matchedInit?.description ||
-        `Turma oficial sincronizada do Google Classroom (${courseName}).`,
+        `Turma sincronizada do Google Classroom (${courseName}).`,
       topics: topicNames,
-      modules: modules.length > 0 ? modules : matchedInit?.modules || [],
-      materials: materials.length > 0 ? materials : matchedInit?.materials || [],
-      evaluations: evaluations.length > 0 ? evaluations : matchedInit?.evaluations || [],
+      modules,
+      materials,
+      evaluations,
     });
   }
 
@@ -482,75 +486,6 @@ export async function fetchGoogleClassroomFullData(accessToken: string): Promise
   return buildSyncResultFromCourseBundles(bundles, 'google_api');
 }
 
-/**
- * Sincronização Completa Google Classroom (Abastece TODAS as disciplinas, materiais do mural,
- * avaliações, notas, módulos e todas as atividades do Classroom do aluno Impacta).
- */
-export function buildFullClassroomImpactaSync(currentSubjects: Subject[]): ClassroomSyncResult {
-  const fullClassroomTasks: Task[] = INITIAL_TASKS.map((t) => ({
-    ...t,
-    importedFromClassroom: true,
-  }));
-
-  const baseList = currentSubjects.length > 0 ? currentSubjects : INITIAL_SUBJECTS;
-  let materialsCount = 0;
-  let evaluationsCount = 0;
-  let announcementsCount = 0;
-
-  const enrichedSubjects: Subject[] = baseList.map((subj) => {
-    const matchedInitial = INITIAL_SUBJECTS.find((s) => s.id === subj.id || s.name.toLowerCase() === subj.name.toLowerCase());
-    const subjTasks = fullClassroomTasks.filter((t) => t.subjectId === subj.id);
-    const completedCount = subjTasks.filter((t) => t.status === 'completed').length;
-    const calculatedProgress =
-      subjTasks.length > 0
-        ? Math.round((completedCount / subjTasks.length) * 100)
-        : matchedInitial?.progress ?? subj.progress;
-
-    const classroomAnnouncement: StudyMaterial = {
-      id: `cls-mural-${subj.id}`,
-      title: `Mural Google Classroom • ${subj.name}`,
-      category: 'artigo',
-      format: 'Mural Classroom',
-      description: `Avisos oficiais, atividades sincronizadas (${subjTasks.length}) e materiais publicados na turma ${subj.name} (${subj.professors.join(', ')}).`,
-      badge: 'Sincronizado Classroom',
-    };
-
-    const baseMaterials = matchedInitial?.materials || subj.materials || [];
-    const hasClassroomMat = baseMaterials.some((m) => m.id === classroomAnnouncement.id);
-    const mergedMaterials = hasClassroomMat
-      ? baseMaterials
-      : [classroomAnnouncement, ...baseMaterials];
-
-    const syncedEvaluations = matchedInitial?.evaluations || subj.evaluations || [];
-
-    materialsCount += mergedMaterials.length;
-    evaluationsCount += syncedEvaluations.length;
-    announcementsCount += 1;
-
-    return {
-      ...(matchedInitial || subj),
-      id: subj.id,
-      progress: calculatedProgress,
-      completedHours: Math.round((calculatedProgress / 100) * subj.totalHours),
-      materials: mergedMaterials,
-      evaluations: syncedEvaluations,
-    };
-  });
-
-  return {
-    subjects: enrichedSubjects,
-    tasks: fullClassroomTasks,
-    stats: {
-      coursesCount: enrichedSubjects.length,
-      tasksCount: fullClassroomTasks.length,
-      materialsCount,
-      evaluationsCount,
-      announcementsCount,
-    },
-    source: 'impacta_full',
-  };
-}
-
 function parsePortugueseDate(text: string): string | null {
   // DD/MM/YYYY or DD/MM
   const slashMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
@@ -558,7 +493,7 @@ function parsePortugueseDate(text: string): string | null {
     const day = slashMatch[1].padStart(2, '0');
     const month = slashMatch[2].padStart(2, '0');
     const yearRaw = slashMatch[3];
-    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : '2026';
+    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : String(new Date().getFullYear());
     return `${year}-${month}-${day}`;
   }
 
@@ -572,7 +507,7 @@ function parsePortugueseDate(text: string): string | null {
     const day = ptMatch[1].padStart(2, '0');
     const prefix = ptMatch[2].slice(0, 3).toLowerCase();
     if (monthsMap[prefix]) {
-      return `2026-${monthsMap[prefix]}-${day}`;
+      return `${new Date().getFullYear()}-${monthsMap[prefix]}-${day}`;
     }
   }
   return null;
@@ -611,15 +546,99 @@ function looksLikeSourceCode(rawContent: string): boolean {
   return codeLines >= 2 && codeLines / nonEmptyLines.length >= 0.25;
 }
 
+
+const UNASSIGNED_COURSE_NAME = 'Atividades sem turma identificada';
+
+function makeCourseDraft(id: string, name: string, index: number, code?: string): Subject {
+  const palette = SUBJECT_PALETTES[index % SUBJECT_PALETTES.length];
+  return {
+    id,
+    code: code || `CLS-${slugify(name).slice(0, 8).toUpperCase() || 'TURMA'}`,
+    name,
+    professors: ['Prof. Responsável'],
+    progress: 0,
+    totalHours: 80,
+    completedHours: 0,
+    studyTimeHours: 0,
+    color: palette.color,
+    accentColor: palette.accentColor,
+    nextClass: 'Google Classroom',
+    schedule: 'Google Classroom',
+    room: 'Google Classroom',
+    description: `Turma importada do Google Classroom (${name}).`,
+    topics: [],
+    modules: [],
+    materials: [],
+    evaluations: [],
+  };
+}
+
+interface RawPastedItem {
+  title: string;
+  courseName: string | null;
+  courseCode?: string;
+  dueDate: string | null;
+  turnedIn: boolean;
+  urgent?: boolean;
+  description?: string;
+  explicitKey?: string;
+}
+
+/** Groups pasted items by class (course drafts) and gives each one a stable dedupe key. */
+function buildResultFromPastedItems(items: RawPastedItem[]): ClassroomSyncResult {
+  const today = toLocalDateString(new Date());
+  const drafts = new Map<string, Subject>();
+  const tasks: ClassroomTaskDraft[] = [];
+
+  for (const item of items) {
+    const courseName = item.courseName?.trim() || '';
+    const draftId = courseName ? `paste-course:${normalizeText(courseName)}` : 'paste-course:unassigned';
+    if (!drafts.has(draftId)) {
+      drafts.set(draftId, makeCourseDraft(draftId, courseName || UNASSIGNED_COURSE_NAME, drafts.size, item.courseCode));
+    }
+    const draft = drafts.get(draftId)!;
+    const inferred = inferTaskType(item.title, item.description || '');
+    const classroomId = item.explicitKey || pastedTaskKey(item.title, courseName, item.dueDate || 'sem-data');
+
+    tasks.push({
+      id: `classroom-${classroomId}`,
+      classroomId,
+      turnedIn: item.turnedIn,
+      title: item.title,
+      subjectId: draft.id,
+      subjectName: draft.name,
+      dueDate: item.dueDate || today,
+      dueTime: '23:59',
+      priority: item.urgent ? 'alta' : inferred.priority,
+      status: item.turnedIn ? 'completed' : 'todo',
+      type: inferred.type,
+      isCriticalMvp: false,
+      description: item.description || `Importado do Google Classroom${courseName ? ` (${courseName})` : ''}.`,
+      importedFromClassroom: true,
+    });
+  }
+
+  return {
+    subjects: [...drafts.values()],
+    tasks,
+    stats: {
+      coursesCount: drafts.size,
+      tasksCount: tasks.length,
+      materialsCount: 0,
+      evaluationsCount: 0,
+      announcementsCount: 0,
+    },
+    source: 'custom_import',
+  };
+}
+
 /**
- * Interpreta texto colado diretamente da página do Google Classroom ("Pendentes" / "Atividades" / "Turmas")
- * ou JSON exportado do Google Takeout e converte em disciplinas e tarefas do EduTrack AI.
+ * Parses text copied from the Google Classroom pages ("Pendentes" / "Atividades") or a JSON export.
+ * Classes are only recognised when they match one of the user's subjects by name/code; activities without
+ * a recognisable class go to an "unassigned" draft so the user decides where they belong (no silent guess).
+ * Never mixes in sample data.
  */
-export function parseClassroomPastedContent(
-  rawContent: string,
-  existingSubjects: Subject[],
-  replaceExisting = true
-): ClassroomSyncResult {
+export function parseClassroomPastedContent(rawContent: string, existingSubjects: Subject[]): ClassroomSyncResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {
     throw new Error('Cole o conteúdo copiado do Google Classroom ou um JSON válido.');
@@ -631,62 +650,42 @@ export function parseClassroomPastedContent(
     );
   }
 
-  const baseSync = buildFullClassroomImpactaSync(existingSubjects);
-
-  // Caso 1: JSON do Conector Apps Script, Google Takeout ou exportação estruturada
+  // Case 1: JSON (Apps Script connector output or a structured export)
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    let parsed: any = null;
     try {
-      const parsed = JSON.parse(trimmed);
-      // Suporte direto ao JSON completo gerado pelo Conector Google Apps Script
+      parsed = JSON.parse(trimmed);
+    } catch {
+      parsed = null; // fall through to the free-text parser
+    }
+    if (parsed) {
       if (Array.isArray(parsed?.courses) && parsed.courses[0]?.course) {
         return buildSyncResultFromCourseBundles(parsed.courses, 'apps_script');
       }
-      const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || parsed.courses || [];
+      const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || [];
       if (Array.isArray(list) && list.length > 0) {
-        const importedTasks: Task[] = list.map((item: any, idx: number) => {
-          const title = String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`);
-          const subjectName = String(item.subjectName || item.courseName || item.turma || 'Innovation Lab: Advanced No/Low Code');
-          const matchedSub =
-            existingSubjects.find((s) => s.name.toLowerCase().includes(subjectName.toLowerCase())) ||
-            existingSubjects[0] ||
-            INITIAL_SUBJECTS[0];
-          const inferred = inferTaskType(title, String(item.description || ''));
+        const items: RawPastedItem[] = list.map((item: any, idx: number) => {
+          const courseName = item.courseName || item.subjectName || item.turma || null;
+          const rawId = item.id ?? item.courseWorkId;
           return {
-            id: `classroom-json-${Date.now()}-${idx}`,
-            title,
-            subjectId: matchedSub.id,
-            subjectName: matchedSub.name,
-            dueDate: String(item.dueDate || '2026-11-23').slice(0, 10),
-            dueTime: String(item.dueTime || '23:59'),
-            priority: item.priority || inferred.priority,
-            status: item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : 'todo',
-            type: inferred.type,
-            isCriticalMvp: inferred.isCriticalMvp,
-            description: String(item.description || 'Importado via pacote JSON do Google Classroom.'),
-            importedFromClassroom: true,
+            title: String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`),
+            courseName: courseName ? String(courseName) : null,
+            dueDate: item.dueDate ? String(item.dueDate).slice(0, 10) : null,
+            turnedIn:
+              item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' || item.state === 'RETURNED',
+            description: item.description ? String(item.description) : undefined,
+            explicitKey:
+              rawId != null && rawId !== ''
+                ? `json:${item.courseId ?? normalizeText(String(courseName || '')).replace(/ /g, '-')}:${rawId}`
+                : undefined,
           };
         });
-
-        const finalTasks = replaceExisting ? importedTasks : [...importedTasks, ...baseSync.tasks];
-        return {
-          subjects: baseSync.subjects,
-          tasks: finalTasks,
-          stats: {
-            coursesCount: baseSync.subjects.length,
-            tasksCount: finalTasks.length,
-            materialsCount: baseSync.stats.materialsCount,
-            evaluationsCount: baseSync.stats.evaluationsCount,
-            announcementsCount: baseSync.stats.announcementsCount,
-          },
-          source: 'custom_import',
-        };
+        return buildResultFromPastedItems(items);
       }
-    } catch {
-      // Continua para o parser de texto livre
     }
   }
 
-  // Caso 2: Texto copiado direto da tela do Google Classroom (Ctrl+A -> Ctrl+C)
+  // Case 2: text copied straight from the Google Classroom page (Ctrl+A -> Ctrl+C)
   const NOISE_LINE_REGEX =
     /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|\d{1,2}:\d{2})$/i;
 
@@ -695,45 +694,41 @@ export function parseClassroomPastedContent(
     .map((l) => l.trim())
     .filter((l) => l.length > 2 && !/^[A-ZÀ-Ú]$/.test(l));
 
-  const extractedTasks: Task[] = [];
-  let currentSubject = existingSubjects[0] || INITIAL_SUBJECTS[0];
-  let currentStatus: TaskStatus = 'todo';
+  const items: RawPastedItem[] = [];
+  let currentSubject: Subject | null = null;
+  let currentTurnedIn = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (/^(conclu[ií]da|entregue|devolvida|nota\b)/i.test(line)) {
-      if (extractedTasks.length > 0 && /entregue|devolvida/i.test(line)) {
-        extractedTasks[extractedTasks.length - 1].status = 'completed';
+      if (items.length > 0 && /entregue|devolvida/i.test(line)) {
+        items[items.length - 1].turnedIn = true;
       } else {
-        currentStatus = 'completed';
+        currentTurnedIn = true;
       }
       continue;
     }
     if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso)/i.test(line)) {
-      if (extractedTasks.length > 0 && /com atraso|pendente/i.test(line)) {
-        extractedTasks[extractedTasks.length - 1].priority = 'alta';
+      if (items.length > 0 && /com atraso|pendente/i.test(line)) {
+        items[items.length - 1].urgent = true;
       } else {
-        currentStatus = 'todo';
+        currentTurnedIn = false;
       }
       continue;
     }
 
-    // Verifica se a linha menciona alguma disciplina conhecida
+    // A short line naming one of the user's subjects is a class header (or the class of the previous card).
     const matchedSub = existingSubjects.find(
       (s) =>
         line.toLowerCase().includes(s.name.toLowerCase()) ||
         (s.code && line.toLowerCase().includes(s.code.toLowerCase()))
     );
     if (matchedSub && line.length <= matchedSub.name.length + 20) {
-      // Se acabou de criar uma tarefa e a linha seguinte é a disciplina, reatribui à tarefa anterior
-      if (extractedTasks.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
-        const lastTask = extractedTasks[extractedTasks.length - 1];
-        if (lastTask.subjectId !== matchedSub.id) {
-          lastTask.subjectId = matchedSub.id;
-          lastTask.subjectName = matchedSub.name;
-          lastTask.description = `Importado diretamente do Google Classroom (${matchedSub.name}).`;
-        }
+      if (items.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
+        const last = items[items.length - 1];
+        last.courseName = matchedSub.name;
+        last.courseCode = matchedSub.code;
       }
       currentSubject = matchedSub;
       continue;
@@ -743,14 +738,14 @@ export function parseClassroomPastedContent(
       continue;
     }
 
-    // Se a linha é apenas uma data solta pertencente ao card anterior
+    // A date on its own belongs to the previous card.
     const onlyDate = parsePortugueseDate(line);
-    if (onlyDate && line.length < 32 && extractedTasks.length > 0) {
-      extractedTasks[extractedTasks.length - 1].dueDate = onlyDate;
+    if (onlyDate && line.length < 32 && items.length > 0) {
+      items[items.length - 1].dueDate = onlyDate;
       continue;
     }
 
-    let dueDate = onlyDate || '2026-11-23';
+    let dueDate: string | null = onlyDate;
     if (i + 1 < lines.length) {
       const nextDate = parsePortugueseDate(lines[i + 1]);
       if (nextDate && lines[i + 1].length < 32) {
@@ -767,44 +762,20 @@ export function parseClassroomPastedContent(
 
     if (!cleanTitle || cleanTitle.length < 3) continue;
 
-    const inferred = inferTaskType(cleanTitle);
-    extractedTasks.push({
-      id: `classroom-paste-${Date.now()}-${i}`,
+    items.push({
       title: cleanTitle,
-      subjectId: currentSubject.id,
-      subjectName: currentSubject.name,
+      courseName: currentSubject ? currentSubject.name : null,
+      courseCode: currentSubject?.code,
       dueDate,
-      dueTime: '23:59',
-      priority: inferred.priority,
-      status:
-        line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu')
-          ? 'completed'
-          : currentStatus,
-      type: inferred.type,
-      isCriticalMvp: inferred.isCriticalMvp,
-      description: `Importado diretamente do Google Classroom (${currentSubject.name}).`,
-      importedFromClassroom: true,
+      turnedIn: currentTurnedIn || /entregue|conclu/i.test(line),
     });
   }
 
-  if (extractedTasks.length === 0) {
+  if (items.length === 0) {
     throw new Error(
       'Nenhuma atividade pôde ser identificada no texto colado. Copie a lista de atividades da aba "Atividades" ou "Pendentes" do Google Classroom (Ctrl+A e Ctrl+C) ou use o Conector Apps Script.'
     );
   }
 
-  const finalTasks = replaceExisting ? extractedTasks : [...extractedTasks, ...baseSync.tasks];
-
-  return {
-    subjects: baseSync.subjects,
-    tasks: finalTasks,
-    stats: {
-      coursesCount: baseSync.subjects.length,
-      tasksCount: finalTasks.length,
-      materialsCount: baseSync.stats.materialsCount,
-      evaluationsCount: baseSync.stats.evaluationsCount,
-      announcementsCount: baseSync.stats.announcementsCount,
-    },
-    source: 'custom_import',
-  };
+  return buildResultFromPastedItems(items);
 }
