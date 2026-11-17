@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Bell, 
   Clock,
@@ -36,6 +36,7 @@ function formatShortTime(date = new Date()): string {
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
   const { currentUser, logout } = useAuth();
   const { isActive: isTimerActive, formattedTime } = useTimer();
@@ -55,19 +56,36 @@ export const Header: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const computeNotifPos = () => {
+    if (!bellBtnRef.current) return null;
+    const rect = bellBtnRef.current.getBoundingClientRect();
+    return {
+      top: Math.round(rect.bottom + 8),
+      right: Math.max(12, Math.round(window.innerWidth - rect.right)),
+    };
+  };
+
+  const toggleNotifications = () => {
+    if (!showNotifications) {
+      const pos = computeNotifPos();
+      if (pos) setNotifPos(pos);
+    }
+    setShowNotifications((prev) => !prev);
+  };
+
+  // Close the panel whenever the route changes.
+  useEffect(() => {
+    setShowNotifications(false);
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     if (!showNotifications) return;
 
     const updatePos = () => {
-      if (!bellBtnRef.current) return;
-      const rect = bellBtnRef.current.getBoundingClientRect();
-      setNotifPos({
-        top: Math.round(rect.bottom + 8),
-        right: Math.max(12, Math.round(window.innerWidth - rect.right)),
-      });
+      const pos = computeNotifPos();
+      if (pos) setNotifPos(pos);
     };
 
-    updatePos();
     window.addEventListener('resize', updatePos);
     window.addEventListener('scroll', updatePos, true);
 
@@ -232,7 +250,7 @@ export const Header: React.FC = () => {
             <button
               ref={bellBtnRef}
               type="button"
-              onClick={() => setShowNotifications((prev) => !prev)}
+              onClick={toggleNotifications}
               className="relative p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-slate-300 hover:text-white transition-colors cursor-pointer"
               title="Avisos Acadêmicos"
               aria-expanded={showNotifications}
@@ -245,10 +263,15 @@ export const Header: React.FC = () => {
 
             {showNotifications &&
               createPortal(
+                // `.bento-card` is unlayered CSS (position: relative; overflow: hidden) and beats
+                // Tailwind v4 layered utilities, so `fixed`/`overflow-y-auto` need `!` to apply.
                 <div
                   ref={notifPanelRef}
+                  role="dialog"
+                  aria-label="Avisos Acadêmicos"
+                  data-testid="notifications-panel"
                   style={{ top: notifPos.top, right: notifPos.right }}
-                  className="bento-card fixed z-50 w-80 max-w-[calc(100vw-24px)] max-h-96 overflow-y-auto rounded-2xl shadow-2xl p-4 animate-in fade-in slide-in-from-top-2"
+                  className="bento-card !fixed z-50 w-80 max-w-[calc(100vw-24px)] max-h-96 !overflow-y-auto rounded-2xl shadow-2xl p-4"
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Avisos & Pendentes</h4>
@@ -268,7 +291,7 @@ export const Header: React.FC = () => {
                             key={t.id}
                             onClick={() => {
                               setShowNotifications(false);
-                              setActiveTab('tarefas');
+                              navigate(`/tarefas?task=${encodeURIComponent(t.id)}`);
                             }}
                             className="w-full text-left p-2.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 text-xs transition-colors cursor-pointer block"
                           >

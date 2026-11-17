@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { usePlanner } from '../context/PlannerContext';
 import type { TaskStatus } from '../types';
 import { 
@@ -29,6 +30,44 @@ export const TasksView: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [onlyMvp, setOnlyMvp] = useState<boolean>(false);
+
+  // Deep link from the notifications bell: /tarefas?task=<id>
+  const [searchParams] = useSearchParams();
+  const focusTaskId = searchParams.get('task');
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const handledFocusRef = useRef<string | null>(null);
+  const taskExists = !!focusTaskId && tasks.some((t) => t.id === focusTaskId);
+
+  useEffect(() => {
+    // Run once per deep-linked id, as soon as the task is loaded.
+    if (!focusTaskId || !taskExists || handledFocusRef.current === focusTaskId) return;
+    handledFocusRef.current = focusTaskId;
+
+    // Make sure the target task is not hidden by filters.
+    setSelectedSubjectId('all');
+    setSelectedPriority('all');
+    setSelectedType('all');
+    setSearchQuery('');
+    setOnlyMvp(false);
+    setHighlightedTaskId(focusTaskId);
+  }, [focusTaskId, taskExists]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const scrollTimer = setTimeout(() => {
+      document
+        .querySelector(`[data-task-id="${CSS.escape(highlightedTaskId)}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clearTimer = setTimeout(() => setHighlightedTaskId(null), 2500);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightedTaskId]);
+
+  const highlightClass = (id: string) =>
+    highlightedTaskId === id ? ' ring-2 ring-cyan-400 ring-offset-2 ring-offset-transparent' : '';
 
   // Google Classroom Sync Modal Trigger
   const [isSyncingClassroom] = useState(false);
@@ -285,11 +324,12 @@ export const TasksView: React.FC = () => {
                       return (
                         <div
                           key={task.id}
+                          data-task-id={task.id}
                           className={`rounded-xl p-4 border transition-all group ${
                             task.isCriticalMvp && task.status !== 'completed'
                               ? 'kanban-mvp-card bg-gradient-to-b from-amber-500/12 to-white/[0.02] border-amber-500/30 hover:border-amber-500/50'
                               : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05] hover:border-white/[0.14]'
-                          }`}
+                          }${highlightClass(task.id)}`}
                         >
                           {/* Subject, Category & Priority badges */}
                           <div className="flex items-start justify-between gap-1.5 mb-2.5 flex-wrap">
@@ -424,13 +464,14 @@ export const TasksView: React.FC = () => {
               return (
                 <div
                   key={task.id}
+                  data-task-id={task.id}
                   className={`rounded-xl p-4 sm:p-5 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                     task.isCriticalMvp && !isCompleted
                       ? 'bg-gradient-to-r from-amber-500/12 to-white/[0.02] border-amber-500/30'
                       : isCompleted
                       ? 'bg-white/[0.01] border-white/[0.04] opacity-60'
                       : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]'
-                  }`}
+                  }${highlightClass(task.id)}`}
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <button
