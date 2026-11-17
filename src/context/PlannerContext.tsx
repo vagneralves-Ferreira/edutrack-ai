@@ -4,6 +4,7 @@ import type { Subject, Task, TaskStatus, ViewTab } from '../types';
 import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { isInnovationLabSubject } from '../utils/helpers';
 import confetti from 'canvas-confetti';
 import {
   buildFullClassroomImpactaSync,
@@ -597,6 +598,20 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addTask = (newTaskData: Omit<Task, 'id'>) => {
     if (addTaskInFlightRef.current) return;
     addTaskInFlightRef.current = true;
+
+    // Guard: MVP is exclusive to Innovation Lab (IMP-INN303), regardless of what the UI sent.
+    const targetSubject = subjects.find((s) => s.id === newTaskData.subjectId);
+    const mvpAllowed = isInnovationLabSubject(
+      targetSubject ?? { id: newTaskData.subjectId, code: '', name: newTaskData.subjectName }
+    );
+    if (!mvpAllowed) {
+      newTaskData = {
+        ...newTaskData,
+        isCriticalMvp: false,
+        scoreWeight: undefined,
+        type: newTaskData.type === 'avaliacao_mvp' ? 'avaliacao' : newTaskData.type,
+      };
+    }
 
     const tempId = 'task-' + Date.now();
     const newTask: Task = {

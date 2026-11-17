@@ -1,4 +1,23 @@
-import type { TaskType, Priority } from '../types';
+import type { TaskType, Priority, Subject } from '../types';
+
+/**
+ * The MVP evaluation is exclusive to Innovation Lab (IMP-INN303).
+ * Matches by course code first, then by the seed id, then by a normalized name
+ * (Classroom/Supabase subjects may have UUID ids or slightly different names).
+ */
+export function isInnovationLabSubject(
+  subject?: Pick<Subject, 'id' | 'code' | 'name'> | null
+): boolean {
+  if (!subject) return false;
+  const code = (subject.code || '').toUpperCase().replace(/[\s_-]/g, '');
+  if (code.includes('INN303')) return true;
+  if (subject.id === 'innovation-lab') return true;
+  const name = (subject.name || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  return /\binnovation\s*lab\b/.test(name);
+}
 
 export function formatDateBR(dateStr: string): string {
   if (!dateStr) return '';

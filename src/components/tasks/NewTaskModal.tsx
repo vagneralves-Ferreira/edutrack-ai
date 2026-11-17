@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Check, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import type { Priority, TaskType } from '../../types';
+import { isInnovationLabSubject } from '../../utils/helpers';
 
 export const NewTaskModal: React.FC = () => {
   const { isNewTaskModalOpen, setIsNewTaskModalOpen, subjects, addTask } = usePlanner();
@@ -26,6 +27,16 @@ export const NewTaskModal: React.FC = () => {
       }
     }
   }, [isNewTaskModalOpen, subjects, subjectId]);
+
+  const selectedSubject = (subjects ?? []).find((s) => s?.id === subjectId);
+  const isMvpAllowed = isInnovationLabSubject(selectedSubject);
+
+  // MVP is exclusive to Innovation Lab: switching to another subject clears it.
+  useEffect(() => {
+    if (isMvpAllowed) return;
+    setIsCriticalMvp(false);
+    setType((prev) => (prev === 'avaliacao_mvp' ? 'avaliacao' : prev));
+  }, [isMvpAllowed]);
 
   if (!isNewTaskModalOpen) return null;
 
@@ -56,19 +67,20 @@ export const NewTaskModal: React.FC = () => {
     setIsSubmitting(true);
 
     const safeSubjects = subjects ?? [];
-    const selectedSubject = safeSubjects.find((s) => s?.id === subjectId) ?? safeSubjects[0];
+    const targetSubject = selectedSubject ?? safeSubjects[0];
+    const saveAsMvp = isCriticalMvp && isInnovationLabSubject(targetSubject);
 
     addTask({
       title: title.trim(),
-      subjectId: selectedSubject?.id ?? subjectId ?? 'sql-fundamentals',
-      subjectName: selectedSubject?.name ?? 'Disciplina Padrão',
+      subjectId: targetSubject?.id ?? subjectId ?? 'sql-fundamentals',
+      subjectName: targetSubject?.name ?? 'Disciplina Padrão',
       dueDate: dueDate || '2026-11-15',
       dueTime,
       priority,
       status: 'todo',
-      type,
-      isCriticalMvp,
-      scoreWeight: isCriticalMvp ? scoreWeight : undefined,
+      type: !saveAsMvp && type === 'avaliacao_mvp' ? 'avaliacao' : type,
+      isCriticalMvp: saveAsMvp,
+      scoreWeight: saveAsMvp ? scoreWeight : undefined,
       description: description.trim() || 'Sem descrição adicional.',
       importedFromClassroom: false,
     });
@@ -175,7 +187,9 @@ export const NewTaskModal: React.FC = () => {
                 <option value="leitura">Leitura Complementar</option>
                 <option value="projeto">Projeto Integrador</option>
                 <option value="avaliacao">Avaliação Parcial</option>
-                <option value="avaliacao_mvp">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
+                {isMvpAllowed && (
+                  <option value="avaliacao_mvp">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
+                )}
               </select>
             </div>
           </div>
@@ -211,8 +225,9 @@ export const NewTaskModal: React.FC = () => {
             </div>
           </div>
 
-          {/* MVP Checkbox */}
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          {/* MVP Checkbox (Innovation Lab only) */}
+          {isMvpAllowed && (
+          <div data-testid="mvp-checkbox-block" className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -246,6 +261,7 @@ export const NewTaskModal: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
