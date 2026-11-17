@@ -47,7 +47,7 @@ export const LoginView: React.FC = () => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail || !password) {
-      setErrorMessage('Por favor, preencha o e-mail institucional e a senha.');
+      setErrorMessage('Por favor, preencha o e-mail e a senha.');
       return;
     }
 
@@ -77,7 +77,7 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
 
     if (!trimmedEmail || !password) {
-      setErrorMessage('Por favor, preencha o e-mail institucional e a senha para cadastrar.');
+      setErrorMessage('Por favor, preencha o e-mail e a senha para cadastrar.');
       return;
     }
 
@@ -103,12 +103,12 @@ export const LoginView: React.FC = () => {
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      setErrorMessage('Por favor, preencha o e-mail institucional para receber o link de recuperação de senha.');
+      setErrorMessage('Digite seu e-mail no campo acima para receber o link de recuperação de senha.');
       return;
     }
 
     if (!EMAIL_REGEX.test(cleanEmail)) {
-      setErrorMessage('Por favor, informe um endereço de e-mail institucional válido.');
+      setErrorMessage('Digite um e-mail válido no campo acima para receber o link de recuperação de senha.');
       return;
     }
 
@@ -288,23 +288,16 @@ export const LoginView: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <p className="mt-5 text-center text-sm text-slate-400">
+            Não tem conta?{' '}
             <Link
               to="/cadastro"
               onClick={handleRegister}
-              className="flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-xl border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 text-center transition-colors"
+              className="font-bold text-violet-300 hover:underline underline-offset-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
             >
-              <span className="text-sm font-bold text-violet-200">Criar conta</span>
-              <span className="text-[11px] text-slate-300">Ainda não tem cadastro?</span>
+              Criar conta
             </Link>
-            <Link
-              to="/reset-password"
-              className="flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-center transition-colors"
-            >
-              <span className="text-sm font-bold text-cyan-300">Alterar minha senha</span>
-              <span className="text-[11px] text-slate-300">Recuperação de acesso</span>
-            </Link>
-          </div>
+          </p>
         </div>
         </div>
       </div>
