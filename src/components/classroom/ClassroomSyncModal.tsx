@@ -489,6 +489,8 @@ export const ClassroomSyncModal: React.FC = () => {
           </div>
 
           <button
+            type="button"
+            aria-label="Fechar"
             onClick={() => setIsClassroomModalOpen(false)}
             className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] text-slate-400 hover:text-white transition-colors cursor-pointer"
           >

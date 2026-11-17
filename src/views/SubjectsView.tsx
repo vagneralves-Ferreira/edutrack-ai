@@ -391,12 +391,17 @@ export const SubjectsView: React.FC = () => {
               </div>
 
               {/* Avaliações e Materiais da Disciplina */}
-              {Array.isArray(activeSubject.evaluations) && activeSubject.evaluations.length > 0 && (
-                <div className="mt-6 pt-5 border-t border-white/[0.06]">
+              {/* Only real data (Classroom); empty state otherwise */}
+              <div className="mt-6 pt-5 border-t border-white/[0.06]" data-testid="subject-evaluations">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 mb-3">
                     <GraduationCap className="w-3.5 h-3.5" />
                     <span>Avaliações & Entregas Registradas</span>
                   </h4>
+                  {(activeSubject.evaluations || []).length === 0 ? (
+                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs text-slate-400">
+                      Nenhuma avaliação registrada. As atividades avaliadas aparecem aqui depois de sincronizar com o Google Classroom.
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {activeSubject.evaluations.map((ev) => (
                       <div
@@ -421,17 +426,21 @@ export const SubjectsView: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                  )}
+              </div>
 
-              {Array.isArray(activeSubject.materials) && activeSubject.materials.length > 0 && (
-                <div className="mt-6 pt-5 border-t border-white/[0.06]">
+              <div className="mt-6 pt-5 border-t border-white/[0.06]" data-testid="subject-materials">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5 mb-3">
                     <FileText className="w-3.5 h-3.5" />
-                    <span>Materiais de Aula & Mural Classroom ({activeSubject.materials.length})</span>
+                    <span>Materiais de Aula & Mural Classroom ({(activeSubject.materials || []).length})</span>
                   </h4>
+                  {(activeSubject.materials || []).length === 0 ? (
+                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs text-slate-400">
+                      Nenhum material ou aviso do mural. Eles aparecem aqui depois de sincronizar com o Google Classroom.
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {activeSubject.materials.map((mat) => (
+                    {(activeSubject.materials || []).map((mat) => (
                       <button
                         type="button"
                         key={mat.id}
@@ -459,8 +468,8 @@ export const SubjectsView: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                  )}
+              </div>
             </div>
           </div>
         )}

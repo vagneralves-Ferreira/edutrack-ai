@@ -109,7 +109,9 @@ interface PlannerContextType {
 const PlannerContext = createContext<PlannerContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  SUBJECTS: 'edutrack_subjects_v6',
+  // v7: the v6 cache still holds sample content (schedule, materials, evaluations) copied from INITIAL_SUBJECTS.
+  SUBJECTS: 'edutrack_subjects_v7',
+  SUBJECTS_STALE: 'edutrack_subjects_v6',
   SUBJECTS_LEGACY: 'edutrack_subjects_v5',
   TASKS: 'edutrack_tasks_v6',
   STUDENT_NAME: 'edutrack_student_name_v1',
@@ -128,52 +130,70 @@ function normalizeSubject(raw: any): Subject {
       s.name.toLowerCase() === String(raw.name || raw.nome || '').toLowerCase()
   );
 
-  const rawProfs =
+  const professors: string[] =
     Array.isArray(raw.professors) && raw.professors.length > 0
-      ? raw.professors.map((p: string) =>
-          p.includes('Fábio e Mentores') ? 'Prof. Evandro Victor Rocha Deliberal' : p
-        )
+      ? raw.professors.map(String)
       : raw.professor
-      ? [String(raw.professor).includes('Fábio e Mentores') ? 'Prof. Evandro Victor Rocha Deliberal' : String(raw.professor)]
-      : matchedInitial?.professors || ['Prof. Responsável'];
+      ? [String(raw.professor)]
+      : ['Prof. Responsável'];
 
-  const profArray =
-    matchedInitial?.id === 'innovation-lab' && rawProfs.some((p: string) => p.includes('Fábio'))
-      ? ['Prof. Evandro Victor Rocha Deliberal']
-      : matchedInitial?.id === 'database-design' &&
-        rawProfs.some((p: string) => p.includes('Evandro') || p.includes('Colegiado de Dados'))
-      ? ['Prof. João Roberto Peres Ortega']
-      : rawProfs;
-
+  // Only real data: the public.subjects row (or what the student typed) plus Classroom content merged later.
+  // The sample catalog (INITIAL_SUBJECTS) is used just for the stable id (MVP rules rely on 'innovation-lab')
+  // and the card colors; never for schedule, description, topics, materials or evaluations.
   return {
     id: matchedInitial ? matchedInitial.id : String(raw.id || 'subj-' + Date.now()),
-    code: String(raw.code || raw.codigo || matchedInitial?.code || 'IMP-000'),
-    name: String(raw.name || raw.nome || matchedInitial?.name || 'Disciplina'),
-    professors: profArray,
+    code: String(raw.code || raw.codigo || 'IMP-000'),
+    name: String(raw.name || raw.nome || 'Disciplina'),
+    professors,
     progress: typeof raw.progress === 'number' ? raw.progress : 0,
     totalHours:
       typeof raw.totalHours === 'number'
         ? raw.totalHours
         : typeof raw.carga_horaria_total === 'number'
         ? raw.carga_horaria_total
-        : (matchedInitial?.totalHours ?? 80),
+        : 80,
     completedHours: typeof raw.completedHours === 'number' ? raw.completedHours : 0,
     studyTimeHours: typeof raw.studyTimeHours === 'number' ? raw.studyTimeHours : 0,
     color: raw.color || matchedInitial?.color || '#3b82f6',
     accentColor: raw.accentColor || matchedInitial?.accentColor || 'from-sky-500 to-blue-600',
-    // public.subjects.horario (edited by the student) wins over the defaults.
-    nextClass: raw.horario || raw.nextClass || matchedInitial?.nextClass || 'A definir • 19:15',
-    schedule: raw.horario || raw.schedule || matchedInitial?.schedule || 'Semestre 2026.2 • 19:15 - 22:00',
-    room: raw.room || matchedInitial?.room || 'Campus Paulista / Online',
-    description:
-      raw.description ||
-      matchedInitial?.description ||
-      'Disciplina cadastrada no planner acadêmico da Faculdade Impacta Tecnologia.',
-    topics: Array.isArray(raw.topics) ? raw.topics : (matchedInitial?.topics || []),
-    modules: Array.isArray(raw.modules) ? raw.modules : (matchedInitial?.modules || []),
-    materials: Array.isArray(raw.materials) ? raw.materials : (matchedInitial?.materials || []),
-    evaluations: Array.isArray(raw.evaluations) ? raw.evaluations : (matchedInitial?.evaluations || []),
+    // public.subjects.horario (edited by the student); empty when not set.
+    nextClass: raw.horario || raw.nextClass || '',
+    schedule: raw.horario || raw.schedule || '',
+    room: raw.room || '',
+    description: raw.description || '',
+    topics: Array.isArray(raw.topics) ? raw.topics : [],
+    modules: Array.isArray(raw.modules) ? raw.modules : [],
+    materials: Array.isArray(raw.materials) ? raw.materials : [],
+    evaluations: Array.isArray(raw.evaluations) ? raw.evaluations : [],
   };
+}
+
+/**
+ * Materials, evaluations and topics read from Classroom, per public.subjects id. There is no column for them in
+ * Supabase, so they are kept in this browser and re-applied whenever subjects are reloaded from the database.
+ */
+type ClassroomSubjectData = Pick<Subject, 'materials' | 'evaluations' | 'topics' | 'modules'>;
+const CLASSROOM_DATA_KEY = 'edutrack_classroom_subject_data_v1';
+
+function loadClassroomSubjectData(userId?: string | null): Record<string, ClassroomSubjectData> {
+  const key = getScopedKey(CLASSROOM_DATA_KEY, userId);
+  if (!key) return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveClassroomSubjectData(userId: string | null | undefined, data: Record<string, ClassroomSubjectData>) {
+  const key = getScopedKey(CLASSROOM_DATA_KEY, userId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving Classroom subject data to localStorage', e);
+  }
 }
 
 function loadSubjectsFromStorage(userId?: string | null): Subject[] {
@@ -292,8 +312,8 @@ function explainTasksError(message: string): string {
 }
 
 /** Adds Classroom materials/evaluations/topics to a subject without dropping what it already had. */
-function mergeClassroomSubjectData(target: Subject, fromClassroom: Subject): Subject {
-  const mergeById = <T extends { id: string }>(a: T[] = [], b: T[] = []) => [
+function mergeClassroomSubjectData<T extends ClassroomSubjectData>(target: T, fromClassroom: ClassroomSubjectData): T {
+  const mergeById = <I extends { id: string }>(a: I[] = [], b: I[] = []) => [
     ...a,
     ...b.filter((item) => !a.some((x) => x.id === item.id)),
   ];
@@ -301,8 +321,8 @@ function mergeClassroomSubjectData(target: Subject, fromClassroom: Subject): Sub
     ...target,
     materials: mergeById(target.materials, fromClassroom.materials),
     evaluations: mergeById(target.evaluations, fromClassroom.evaluations),
-    topics: target.topics?.length ? target.topics : fromClassroom.topics,
-    modules: target.modules?.length ? target.modules : fromClassroom.modules,
+    topics: target.topics?.length ? target.topics : fromClassroom.topics || [],
+    modules: target.modules?.length ? target.modules : fromClassroom.modules || [],
   };
 }
 
@@ -350,18 +370,24 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [ignoredCourses, setIgnoredCourses] = useState<IgnoredCourse[]>([]);
 
   /** Replaces subjects/tasks in state (and the local cache) with rows read from Supabase. */
-  const applyDbSnapshot = (dbSubjects: any[], dbTasks: any[], extraSubjectData?: Map<string, Subject>) => {
-    let uniqueDbSubjects = dedupeDbSubjects(dbSubjects);
-    if (extraSubjectData && extraSubjectData.size > 0) {
-      uniqueDbSubjects = uniqueDbSubjects.map((s) => {
-        const extra = extraSubjectData.get(normalizeText(s.name));
-        return extra ? mergeClassroomSubjectData(s, extra) : s;
-      });
+  const applyDbSnapshot = (dbSubjects: any[], dbTasks: any[]) => {
+    // Classroom content saved for each public.subjects row (by id), re-applied by subject name after dedupe.
+    const stored = loadClassroomSubjectData(userId);
+    const classroomByName = new Map<string, ClassroomSubjectData>();
+    for (const row of dbSubjects) {
+      const data = stored[String(row.id)];
+      if (!data) continue;
+      const key = normalizeText(row.nome);
+      const prev = classroomByName.get(key);
+      classroomByName.set(key, prev ? mergeClassroomSubjectData(prev, data) : data);
     }
+    const uniqueDbSubjects = dedupeDbSubjects(dbSubjects).map((s) => {
+      const extra = classroomByName.get(normalizeText(s.name));
+      return extra ? mergeClassroomSubjectData(s, extra) : s;
+    });
     setSubjects(uniqueDbSubjects);
-    setSelectedSubject((prev) =>
-      prev && uniqueDbSubjects.some((s) => s.id === prev.id) ? prev : uniqueDbSubjects[0] || null
-    );
+    // Use the fresh object (the previous one may lack the content just synced).
+    setSelectedSubject((prev) => uniqueDbSubjects.find((s) => s.id === prev?.id) || uniqueDbSubjects[0] || null);
     persistSubjectsToStorage(uniqueDbSubjects, userId);
 
     const cleanDbTasks = mapDbTasks(dbTasks, dbSubjects, uniqueDbSubjects);
@@ -384,6 +410,15 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Limpa e recarrega o estado em memória quando o usuário faz logout ou troca de conta
   useEffect(() => {
+    // Drop the old subjects cache that mixed sample content into real subjects.
+    const staleKey = getScopedKey(STORAGE_KEYS.SUBJECTS_STALE, userId);
+    if (staleKey) {
+      try {
+        localStorage.removeItem(staleKey);
+      } catch {
+        // storage unavailable
+      }
+    }
     const scopedSubs = loadSubjectsFromStorage(userId);
     const scopedTasks = loadTasksFromStorage(userId);
     const scopedSync = loadSyncMetaFromStorage(userId);
@@ -544,9 +579,6 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       studyTimeHours: 0,
       color: '#3b82f6',
       accentColor: 'from-sky-500 to-blue-600',
-      nextClass: 'Horário a definir',
-      schedule: 'Semestre 2026.2',
-      room: 'Campus Paulista / Online',
     });
 
     if (addSubjectInFlightRef.current) {
@@ -711,7 +743,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
 
       const draftToUuid = new Map<string, string | null>();
-      const classroomDataBySubjectName = new Map<string, Subject>();
+      // Classroom content per public.subjects id (several classes may be linked to one subject).
+      const classroomDataBySubjectId = new Map<string, ClassroomSubjectData>();
       let subjectsCreated = 0;
       let ignoredCount = 0;
 
@@ -747,7 +780,14 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
         draftToUuid.set(draft.id, dbSub.id);
-        classroomDataBySubjectName.set(normalizeText(dbSub.nome), draft);
+        const fromDraft: ClassroomSubjectData = {
+          materials: draft.materials || [],
+          evaluations: draft.evaluations || [],
+          topics: draft.topics || [],
+          modules: draft.modules || [],
+        };
+        const prevData = classroomDataBySubjectId.get(dbSub.id);
+        classroomDataBySubjectId.set(dbSub.id, prevData ? mergeClassroomSubjectData(prevData, fromDraft) : fromDraft);
       }
 
       // 2. Upsert the activities by their stable Classroom key (no deletes, no duplicates).
@@ -788,7 +828,12 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       // 3. Reload from the database so every card carries its real UUID.
       const { dbSubjects, dbTasks } = await fetchDbRows(uid);
-      applyDbSnapshot(dbSubjects, dbTasks, classroomDataBySubjectName);
+      // This sync's Classroom content replaces what was saved before for the same subjects.
+      saveClassroomSubjectData(userId, {
+        ...loadClassroomSubjectData(userId),
+        ...Object.fromEntries(classroomDataBySubjectId),
+      });
+      applyDbSnapshot(dbSubjects, dbTasks);
 
       const meta: ClassroomSyncMetadata = {
         timestamp: new Date().toLocaleString('pt-BR'),
@@ -877,7 +922,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       code,
       name,
       professors,
-      nextClass: schedule || 'Horário a definir',
+      nextClass: schedule,
       schedule: schedule || s.schedule,
     });
     setSubjects((prev) => prev.map((s) => (s.id === subjectId ? apply(s) : s)));
@@ -927,6 +972,12 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const items = keys.map((courseKey) => ({ courseKey, courseName: subject.name }));
       ignoredStorage = await addIgnoredCourses(userId, items);
       setIgnoredCourses((prev) => [...prev.filter((c) => !keys.includes(c.courseKey)), ...items]);
+    }
+
+    if (ids.length > 0) {
+      const stored = loadClassroomSubjectData(userId);
+      ids.forEach((id) => delete stored[id]);
+      saveClassroomSubjectData(userId, stored);
     }
 
     const deletedIds = new Set(dbTasks.map((t) => t.id));
