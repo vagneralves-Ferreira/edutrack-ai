@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS public.subjects (
   carga_horaria_total INTEGER NOT NULL DEFAULT 80,
   -- Class schedule edited by the student (supabase/migrations/20261117000000_subject_schedule_and_ignored_courses.sql)
   horario TEXT,
+  -- Description and syllabus topics edited by the student (supabase/migrations/20261118000000_subject_description_and_topics.sql)
+  descricao TEXT,
+  topicos TEXT[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

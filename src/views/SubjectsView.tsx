@@ -25,6 +25,8 @@ export const SubjectsView: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editProf, setEditProf] = useState('');
   const [editSchedule, setEditSchedule] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTopics, setEditTopics] = useState('');
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -70,6 +72,8 @@ export const SubjectsView: React.FC = () => {
       (activeSubject.professors || []).filter((p) => p !== 'Prof. Responsável').join(', ')
     );
     setEditSchedule(isDefaultSchedule(activeSubject.nextClass) ? '' : activeSubject.nextClass);
+    setEditDescription(activeSubject.description || '');
+    setEditTopics((activeSubject.topics || []).join('\n'));
     setDialogError(null);
     setIsEditOpen(true);
   };
@@ -85,6 +89,8 @@ export const SubjectsView: React.FC = () => {
         name: editName,
         professor: editProf,
         schedule: editSchedule,
+        description: editDescription,
+        topics: editTopics.split('\n'),
       });
       setIsEditOpen(false);
       setNotice(warning ? { kind: 'warning', text: warning } : { kind: 'success', text: `Disciplina "${editName.trim()}" atualizada.` });
@@ -543,7 +549,7 @@ export const SubjectsView: React.FC = () => {
       {/* Portals: the page wrapper's animation creates a stacking context that would put dialogs under the sticky header */}
       {isEditOpen && activeSubject && createPortal(
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in">
-          <div role="dialog" aria-modal="true" aria-labelledby="edit-subject-title" className="bento-card rounded-2xl w-full max-w-md p-7 shadow-2xl relative">
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-subject-title" className="bento-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-7 shadow-2xl relative">
             <button
               type="button"
               aria-label="Fechar"
@@ -598,6 +604,29 @@ export const SubjectsView: React.FC = () => {
                   onChange={(e) => setEditSchedule(e.target.value)}
                   className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
                 />
+              </div>
+              <div>
+                <label htmlFor="edit-subject-description" className="block text-xs font-semibold text-slate-300 mb-1.5">Descrição</label>
+                <textarea
+                  id="edit-subject-description"
+                  rows={3}
+                  placeholder="Ex: Modelagem de dados, normalização e SQL."
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all resize-y"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-subject-topics" className="block text-xs font-semibold text-slate-300 mb-1.5">Tópicos da ementa</label>
+                <textarea
+                  id="edit-subject-topics"
+                  rows={4}
+                  placeholder={'Um tópico por linha\nEx: Modelo Entidade-Relacionamento'}
+                  value={editTopics}
+                  onChange={(e) => setEditTopics(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all resize-y"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Um tópico por linha. Deixe vazio para não mostrar.</p>
               </div>
               {dialogError && (
                 <p role="alert" className="text-xs text-rose-300 bg-rose-500/15 border border-rose-500/30 rounded-xl p-3">{dialogError}</p>

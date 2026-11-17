@@ -27,6 +27,8 @@ export interface SubjectEditInput {
   name: string;
   professor: string;
   schedule: string;
+  description: string;
+  topics: string[];
 }
 
 export interface SubjectDeleteSummary {
@@ -160,8 +162,14 @@ function normalizeSubject(raw: any): Subject {
     nextClass: raw.horario || raw.nextClass || '',
     schedule: raw.horario || raw.schedule || '',
     room: raw.room || '',
-    description: raw.description || '',
-    topics: Array.isArray(raw.topics) ? raw.topics : [],
+    // public.subjects.descricao / topicos (typed by the student); Classroom topics fill in when empty.
+    description: raw.descricao || raw.description || '',
+    topics:
+      Array.isArray(raw.topicos) && raw.topicos.length > 0
+        ? raw.topicos.map(String)
+        : Array.isArray(raw.topics)
+        ? raw.topics
+        : [],
     modules: Array.isArray(raw.modules) ? raw.modules : [],
     materials: Array.isArray(raw.materials) ? raw.materials : [],
     evaluations: Array.isArray(raw.evaluations) ? raw.evaluations : [],
@@ -311,6 +319,14 @@ function explainTasksError(message: string): string {
   return `Erro ao salvar as atividades no Supabase: ${message}`;
 }
 
+/** Stable list order: by code, then name. */
+function compareSubjects(a: Pick<Subject, 'code' | 'name'>, b: Pick<Subject, 'code' | 'name'>): number {
+  return (
+    a.code.localeCompare(b.code, 'pt-BR', { numeric: true, sensitivity: 'base' }) ||
+    a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+  );
+}
+
 /** Adds Classroom materials/evaluations/topics to a subject without dropping what it already had. */
 function mergeClassroomSubjectData<T extends ClassroomSubjectData>(target: T, fromClassroom: ClassroomSubjectData): T {
   const mergeById = <I extends { id: string }>(a: I[] = [], b: I[] = []) => [
@@ -381,10 +397,12 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const prev = classroomByName.get(key);
       classroomByName.set(key, prev ? mergeClassroomSubjectData(prev, data) : data);
     }
-    const uniqueDbSubjects = dedupeDbSubjects(dbSubjects).map((s) => {
-      const extra = classroomByName.get(normalizeText(s.name));
-      return extra ? mergeClassroomSubjectData(s, extra) : s;
-    });
+    const uniqueDbSubjects = dedupeDbSubjects(dbSubjects)
+      .map((s) => {
+        const extra = classroomByName.get(normalizeText(s.name));
+        return extra ? mergeClassroomSubjectData(s, extra) : s;
+      })
+      .sort(compareSubjects);
     setSubjects(uniqueDbSubjects);
     // Use the fresh object (the previous one may lack the content just synced).
     setSelectedSubject((prev) => uniqueDbSubjects.find((s) => s.id === prev?.id) || uniqueDbSubjects[0] || null);
@@ -894,26 +912,35 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .filter(Boolean);
     if (professors.length === 0) professors.push('Prof. Responsável');
     const schedule = input.schedule.trim();
+    const description = input.description.trim();
+    const topics = input.topics.map((t) => t.trim()).filter(Boolean);
 
     let warning: string | undefined;
     if (userId) {
       const ids = (await findDbSubjectRows(userId, subject)).map((r) => r.id);
       if (ids.length > 0) {
-        const base = { codigo: code, nome: name, professor: professors.join(', ') };
-        let { error } = await supabase
-          .from('subjects')
-          .update({ ...base, horario: schedule || null })
-          .eq('user_id', userId)
-          .in('id', ids);
-        if (error && /horario/i.test(error.message)) {
-          // Migration 20261117000000 not applied yet: save the rest and say the schedule was not stored.
-          ({ error } = await supabase.from('subjects').update(base).eq('user_id', userId).in('id', ids));
-          if (!error) {
-            warning =
-              'Nome, código e professor foram salvos. O horário não foi salvo no Supabase porque falta rodar a migration supabase/migrations/20261117000000_subject_schedule_and_ignored_courses.sql (ele volta ao padrão ao recarregar).';
-          }
+        // Columns added by later migrations: if one is missing, save the rest and say what was not stored.
+        const optional: Record<string, { value: unknown; label: string; migration: string }> = {
+          horario: { value: schedule || null, label: 'horário', migration: '20261117000000_subject_schedule_and_ignored_courses.sql' },
+          descricao: { value: description || null, label: 'descrição', migration: '20261118000000_subject_description_and_topics.sql' },
+          topicos: { value: topics.length ? topics : null, label: 'tópicos', migration: '20261118000000_subject_description_and_topics.sql' },
+        };
+        const payload: Record<string, unknown> = { codigo: code, nome: name, professor: professors.join(', ') };
+        Object.entries(optional).forEach(([col, o]) => (payload[col] = o.value));
+        const skipped: string[] = [];
+        let error: { message: string } | null = null;
+        for (let attempt = 0; attempt <= Object.keys(optional).length; attempt++) {
+          ({ error } = await supabase.from('subjects').update(payload).eq('user_id', userId).in('id', ids));
+          const missing = error && Object.keys(optional).find((col) => col in payload && new RegExp(`'${col}'|\\b${col}\\b`).test(error!.message));
+          if (!missing) break;
+          delete payload[missing];
+          skipped.push(missing);
         }
         if (error) throw new Error(`Erro ao salvar a disciplina: ${error.message}`);
+        if (skipped.length > 0) {
+          const migrations = [...new Set(skipped.map((c) => `supabase/migrations/${optional[c].migration}`))];
+          warning = `Disciplina salva, exceto ${skipped.map((c) => optional[c].label).join(', ')}: falta rodar ${migrations.join(' e ')} no Supabase (voltam ao valor anterior ao recarregar).`;
+        }
       }
     }
 
@@ -924,6 +951,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       professors,
       nextClass: schedule,
       schedule: schedule || s.schedule,
+      description,
+      topics,
     });
     setSubjects((prev) => prev.map((s) => (s.id === subjectId ? apply(s) : s)));
     setSelectedSubject((prev) => (prev?.id === subjectId ? apply(prev) : prev));
@@ -1160,7 +1189,9 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const subjectsWithRealProgress = useMemo(() => {
-    return subjects.map((subj) => {
+    // Fixed order by code (then name): the database returns an edited row last, which made it jump around.
+    const ordered = [...subjects].sort(compareSubjects);
+    return ordered.map((subj) => {
       const subTasks = tasks.filter(
         (t) =>
           t.subjectId === subj.id ||
