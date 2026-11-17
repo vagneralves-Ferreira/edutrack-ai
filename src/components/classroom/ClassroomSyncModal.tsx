@@ -29,6 +29,13 @@ import {
   type ClassroomSyncResult,
 } from '../../services/classroomSync';
 import { findMatchingSubject } from '../../services/classroomImport';
+import {
+  getGoogleClientId,
+  isGoogleIdentityLoaded,
+  loadGoogleIdentityServices,
+  requestClassroomAccess,
+  revokeAccessToken,
+} from '../../services/googleAuth';
 import type { Subject } from '../../types';
 
 function describeSummary(summary: ClassroomApplySummary): string {
@@ -43,13 +50,21 @@ function describeSummary(summary: ClassroomApplySummary): string {
   return `Importação concluída: ${parts.join(' • ')}.`;
 }
 
-const CLASSROOM_SCOPES = [
-  'https://www.googleapis.com/auth/classroom.courses.readonly',
-  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
-  'https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly',
-  'https://www.googleapis.com/auth/classroom.announcements.readonly',
-  'https://www.googleapis.com/auth/classroom.rosters.readonly',
-].join(' ');
+/** Removes OAuth tokens/client ids that older versions of this modal saved in localStorage. */
+function purgeLegacyGoogleStorage() {
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('edutrack_google_classroom_token_') || key.startsWith('edutrack_google_client_id_'))) {
+        stale.push(key);
+      }
+    }
+    stale.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // storage unavailable: nothing to clean
+  }
+}
 
 export const ClassroomSyncModal: React.FC = () => {
   const { currentUser } = useAuth();
@@ -62,7 +77,10 @@ export const ClassroomSyncModal: React.FC = () => {
     lastClassroomSync,
   } = usePlanner();
 
-  const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('apps_script');
+  const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('google_api');
+  const [googleReady, setGoogleReady] = useState<boolean>(() => isGoogleIdentityLoaded());
+  const [googleLoadError, setGoogleLoadError] = useState<string | null>(null);
+  const googleClientId = getGoogleClientId();
   /** Result waiting for the "Turmas novas" review (classes that match no registered subject). */
   const [pendingResult, setPendingResult] = useState<ClassroomSyncResult | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, CourseResolution>>({});
@@ -76,12 +94,6 @@ export const ClassroomSyncModal: React.FC = () => {
   );
   const [showToken, setShowToken] = useState<boolean>(false);
   const [warnMsg, setWarnMsg] = useState<string | null>(null);
-  const [accessToken, setAccessToken] = useState<string>(
-    () => (userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '')
-  );
-  const [googleClientId, setGoogleClientId] = useState<string>(
-    () => (userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '')
-  );
   const [pastedText, setPastedText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string>('');
@@ -93,13 +105,34 @@ export const ClassroomSyncModal: React.FC = () => {
     setScriptToken(userId ? localStorage.getItem(`edutrack_apps_script_token_${userId}`) || '' : '');
     setShowToken(false);
     setWarnMsg(null);
-    setAccessToken(userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '');
-    setGoogleClientId(userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '');
     setErrorMsg(null);
     setSuccessMsg(null);
     setPendingResult(null);
     setResolutions({});
   }, [userId]);
+
+  useEffect(() => {
+    purgeLegacyGoogleStorage();
+  }, []);
+
+  // Load Google Identity Services as soon as the modal opens, so the popup opens directly on click.
+  useEffect(() => {
+    if (!isClassroomModalOpen || !googleClientId) return;
+    let alive = true;
+    loadGoogleIdentityServices()
+      .then(() => {
+        if (alive) {
+          setGoogleReady(true);
+          setGoogleLoadError(null);
+        }
+      })
+      .catch((err: Error) => {
+        if (alive) setGoogleLoadError(err.message);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isClassroomModalOpen, googleClientId]);
 
   if (!isClassroomModalOpen) return null;
 
@@ -222,91 +255,59 @@ export const ClassroomSyncModal: React.FC = () => {
     }
   };
 
-  const handleGoogleApiTokenSync = async (tokenToUse?: string) => {
-    const token = (tokenToUse ?? accessToken).trim();
+  /**
+   * "Entrar com Google": opens the consent popup (must stay synchronous inside the click), reads Classroom
+   * with the in-memory token, revokes it right away, then follows the usual review + upsert path.
+   * The token is never stored (no state, no localStorage, no Supabase).
+   */
+  const handleGoogleSignIn = () => {
     setErrorMsg(null);
     setSuccessMsg(null);
+    setWarnMsg(null);
 
-    if (!token) {
-      setErrorMsg('Informe o Token de Acesso OAuth 2.0 do Google Classroom ou autentique com o Google.');
+    if (!googleClientId) {
+      setErrorMsg('O login com Google ainda não foi configurado neste ambiente (falta VITE_GOOGLE_CLIENT_ID).');
+      return;
+    }
+    if (!googleReady) {
+      setErrorMsg(googleLoadError || 'O login do Google ainda está carregando. Aguarde um instante e clique de novo.');
       return;
     }
 
     setIsLoading(true);
-    setStepStatus('Consultando turmas ativas em classroom.googleapis.com/v1/courses...');
+    setStepStatus('Aguardando sua autorização na janela do Google...');
+    // Called synchronously from the click so the browser does not block the popup.
+    const accessPromise = requestClassroomAccess(googleClientId);
 
-    try {
-      if (userId) localStorage.setItem(`edutrack_google_classroom_token_${userId}`, token);
-      const result = await fetchGoogleClassroomFullData(token);
-      await processResult(result);
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMsg(err?.message || 'Não foi possível conectar à API do Google Classroom.');
-    }
-  };
+    void (async () => {
+      let token: string | null = null;
+      try {
+        const access = await accessPromise;
+        token = access.accessToken;
+        setStepStatus('Lendo suas turmas, atividades e entregas no Google Classroom...');
+        const result = await fetchGoogleClassroomFullData(token, {
+          materials: access.granted.materials,
+          announcements: access.granted.announcements,
+          rosters: access.granted.rosters,
+        });
+        // Data is in memory now: give the token back to Google before writing anything.
+        revokeAccessToken(token);
+        token = null;
 
-  const handleGoogleOAuthPopup = () => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    const cleanClientId = googleClientId.trim();
-    if (!cleanClientId) {
-      setErrorMsg(
-        'Informe seu Google OAuth Client ID (.apps.googleusercontent.com) ou use a aba "1. Tempo Real (Apps Script)" / "2. Colar do Classroom".'
-      );
-      return;
-    }
-    if (cleanClientId.includes('@') || !cleanClientId.includes('.apps.googleusercontent.com')) {
-      setErrorMsg(
-        'Você digitou um e-mail ou texto inválido no campo Client ID. Aqui vai o ID de aplicativo do Google Cloud (terminado em .apps.googleusercontent.com), NÃO o seu e-mail institucional. Recomendamos usar a aba "1. Tempo Real (Apps Script)" ou "2. Colar do Classroom".'
-      );
-      return;
-    }
-
-    if (userId) localStorage.setItem(`edutrack_google_client_id_${userId}`, cleanClientId);
-    setIsLoading(true);
-    setStepStatus('Abrindo janela de autorização do Google Classroom...');
-
-    const initAndRequest = () => {
-      const g = (window as any).google;
-      if (!g?.accounts?.oauth2) {
+        const warnings = [...(result.warnings || [])];
+        if (access.missingOptional.length > 0) {
+          warnings.push(`Permissões não concedidas: ${access.missingOptional.join(', ')}. Essas informações ficaram de fora.`);
+        }
+        setWarnMsg(warnings.length > 0 ? warnings.join(' ') : null);
+        await processResult(result);
+      } catch (err: any) {
         setIsLoading(false);
-        setErrorMsg('Biblioteca Google Identity Services não pôde ser carregada.');
-        return;
+        setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
+      } finally {
+        if (token) revokeAccessToken(token);
       }
-
-      const tokenClient = g.accounts.oauth2.initTokenClient({
-        client_id: cleanClientId,
-        scope: CLASSROOM_SCOPES,
-        callback: (resp: any) => {
-          if (resp?.error) {
-            setIsLoading(false);
-            setErrorMsg(`Erro OAuth Google: ${resp.error}`);
-            return;
-          }
-          if (resp?.access_token) {
-            setAccessToken(resp.access_token);
-            void handleGoogleApiTokenSync(resp.access_token);
-          }
-        },
-      });
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    };
-
-    if ((window as any).google?.accounts?.oauth2) {
-      initAndRequest();
-    } else {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.onload = initAndRequest;
-      script.onerror = () => {
-        setIsLoading(false);
-        setErrorMsg('Falha ao carregar script de autenticação do Google.');
-      };
-      document.body.appendChild(script);
-    }
+    })();
   };
-
   const handlePasteOrJsonImport = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -385,54 +386,34 @@ export const ClassroomSyncModal: React.FC = () => {
         )}
 
         {/* Mode Selector Tabs */}
-        <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2 border-b border-white/[0.06]">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveMode('apps_script');
-              setErrorMsg(null);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'apps_script'
-                ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-md shadow-emerald-600/25'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
-            }`}
-          >
-            <Link2 className="w-3.5 h-3.5" />
-            <span>1. Tempo Real (Apps Script)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveMode('paste_import');
-              setErrorMsg(null);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'paste_import'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
-            }`}
-          >
-            <FileJson className="w-3.5 h-3.5" />
-            <span>2. Colar do Classroom (Ctrl+A)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveMode('google_api');
-              setErrorMsg(null);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMode === 'google_api'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>3. API Google (Token OAuth)</span>
-          </button>
+        <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2 border-b border-white/[0.06]" role="tablist">
+          {(
+            [
+              { mode: 'google_api', label: '1. Entrar com Google', Icon: KeyRound },
+              { mode: 'paste_import', label: '2. Colar do Classroom (Ctrl+A)', Icon: FileJson },
+              { mode: 'apps_script', label: '3. Apps Script (contas pessoais)', Icon: Link2 },
+            ] as const
+          ).map(({ mode, label, Icon }) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={activeMode === mode}
+              onClick={() => {
+                setActiveMode(mode);
+                setErrorMsg(null);
+                setWarnMsg(null);
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeMode === mode
+                  ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-md shadow-emerald-600/25'
+                  : 'bg-white/[0.04] text-slate-400 hover:text-white'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
 
         {/* Body */}
@@ -641,64 +622,53 @@ export const ClassroomSyncModal: React.FC = () => {
 
           {!pendingResult && activeMode === 'google_api' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-slate-200">
-                    Opção A: Token de Acesso OAuth 2.0 (Conexão Direta `classroom.googleapis.com`)
-                  </label>
-                  <a
-                    href="https://developers.google.com/oauthplayground/#step1&apisSelect=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fclassroom.courses.readonly%2Chttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fclassroom.coursework.me.readonly%2Chttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fclassroom.courseworkmaterials.readonly%2Chttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fclassroom.announcements.readonly%2Chttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fclassroom.rosters.readonly"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-400 hover:text-cyan-300"
-                  >
-                    <span>Gerar Token em 1 clique no Google</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Clique em <strong>"Gerar Token em 1 clique no Google"</strong>, autorize sua conta do Google Classroom,
-                  clique em <em>Exchange authorization code for tokens</em> e cole o <strong>Access token</strong> (<code>ya29...</code> — <strong>NÃO</strong> digite sua senha do e-mail) abaixo:
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3" data-testid="google-signin-panel">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-cyan-400">
+                  Conexão oficial com o Google Classroom
+                </h4>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Entre com a conta do Google em que você usa o Classroom (por exemplo, a da faculdade). O EduTrack pede
+                  <strong> só permissões de leitura</strong>:
                 </p>
-                <input
-                  type="text"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="ya29.a0AeDClZ... (cole o token longo gerado no OAuth Playground, não sua senha)"
-                  className="w-full bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-violet-500"
-                />
+                <ul className="text-[11px] text-slate-300 space-y-0.5 list-disc list-inside">
+                  <li>suas turmas e os nomes dos professores;</li>
+                  <li>atividades e as suas entregas;</li>
+                  <li>materiais e avisos do mural.</li>
+                </ul>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  O acesso é usado apenas durante a importação e cancelado logo em seguida: nada fica salvo no navegador
+                  nem no banco. Enquanto o app estiver em modo de teste no Google, pode aparecer "O Google não verificou
+                  este app": clique em <em>Avançado</em> → <em>Acessar EduTrack AI</em>.
+                </p>
+
+                {!googleClientId && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
+                    O login com Google ainda não foi configurado neste ambiente (falta <code>VITE_GOOGLE_CLIENT_ID</code>).
+                    Enquanto isso, use "Colar do Classroom".
+                  </div>
+                )}
+                {googleClientId && googleLoadError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300">
+                    {googleLoadError}
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  disabled={isLoading}
-                  onClick={() => handleGoogleApiTokenSync()}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  disabled={isLoading || !googleClientId || !googleReady}
+                  onClick={handleGoogleSignIn}
+                  className="w-full py-3.5 px-5 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed border border-slate-300 text-slate-800 font-bold text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                  <span>Importar Tudo da Minha Conta Google Classroom via API</span>
+                  <svg aria-hidden="true" viewBox="0 0 48 48" className="w-4 h-4">
+                    <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z" />
+                    <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z" />
+                    <path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z" />
+                    <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z" />
+                  </svg>
+                  <span>
+                    {isLoading ? 'Importando do Google Classroom...' : googleClientId && !googleReady && !googleLoadError ? 'Carregando login do Google...' : 'Entrar com Google'}
+                  </span>
                 </button>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-2.5">
-                <label className="block text-xs font-bold text-slate-300">
-                  Opção B: Login via Pop-up OAuth 2.0 (Google Cloud Client ID — não é seu e-mail)
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={googleClientId}
-                    onChange={(e) => setGoogleClientId(e.target.value)}
-                    placeholder="123456789-xxxx.apps.googleusercontent.com (não digite seu e-mail)"
-                    className="flex-1 bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-violet-500"
-                  />
-                  <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={handleGoogleOAuthPopup}
-                    className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white font-semibold text-xs cursor-pointer shrink-0"
-                  >
-                    Abrir Pop-up Google
-                  </button>
-                </div>
               </div>
             </div>
           )}
@@ -748,11 +718,11 @@ export const ClassroomSyncModal: React.FC = () => {
             </div>
           )}
 
-          {/* Open-script warning (Apps Script answered without checking the token) */}
+          {/* Warnings: open Apps Script, classes that could not be read, permissions not granted */}
           {warnMsg && (
             <div
               role="alert"
-              data-testid="apps-script-open-warning"
+              data-testid="classroom-warning"
               className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-start gap-2.5 text-xs text-amber-300"
             >
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />

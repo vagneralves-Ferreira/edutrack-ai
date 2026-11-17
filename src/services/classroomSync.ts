@@ -36,6 +36,8 @@ export interface ClassroomSyncResult {
   source: 'google_api' | 'apps_script' | 'custom_import';
   /** Apps Script only: false when the deployed script answers without checking the secret token. */
   scriptProtected?: boolean;
+  /** Non-fatal problems to show the user (e.g. a class whose activities could not be read). */
+  warnings?: string[];
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -473,83 +475,162 @@ export async function fetchGoogleAppsScriptClassroom(webAppUrl: string, token: s
   return { ...buildSyncResultFromCourseBundles(bundles, 'apps_script'), scriptProtected };
 }
 
+export class ClassroomApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const CLASSROOM_API = 'https://classroom.googleapis.com/v1';
+
+async function classroomGet(path: string, accessToken: string, params: Record<string, string>): Promise<any> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${CLASSROOM_API}/${path}${qs ? `?${qs}` : ''}`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ClassroomApiError(res.status, String(body?.error?.message || `HTTP ${res.status}`));
+  }
+  return res.json();
+}
+
+/** Follows nextPageToken so no course, activity or submission is left behind (capped as a safety net). */
+export async function classroomListAll(
+  path: string,
+  key: string,
+  accessToken: string,
+  params: Record<string, string> = {},
+  maxPages = 25
+): Promise<any[]> {
+  const items: any[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+  do {
+    const data = await classroomGet(path, accessToken, { ...params, ...(pageToken ? { pageToken } : {}) });
+    if (Array.isArray(data?.[key])) items.push(...data[key]);
+    pageToken = data?.nextPageToken || undefined;
+    pages++;
+  } while (pageToken && pages < maxPages);
+  return items;
+}
+
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+export interface ClassroomApiGrants {
+  materials: boolean;
+  announcements: boolean;
+  rosters: boolean;
+}
+
+const SESSION_EXPIRED =
+  'A autorização do Google expirou ou foi revogada. Clique em "Entrar com Google" de novo.';
+
 /**
- * Conecta diretamente na API REST oficial do Google Classroom (v1) usando um OAuth2 Access Token
- * e importa TODOS os cursos, professores, tópicos, materiais, avisos do mural, atividades, notas e entregas.
+ * Reads the student's Classroom through the official REST API (v1) with a short-lived OAuth access token.
+ * Courses and activities/submissions are required; materials, announcements and teacher names are read only
+ * when the matching permission was granted. Problems are reported in `warnings` instead of being swallowed.
  */
-export async function fetchGoogleClassroomFullData(accessToken: string): Promise<ClassroomSyncResult> {
-  const cleanToken = accessToken.trim().replace(/^Bearer\s+/i, '');
-  if (!cleanToken || cleanToken.length < 25 || !cleanToken.startsWith('ya29.')) {
-    throw new Error(
-      'Isso não é um Token OAuth 2.0 válido (Access Token sempre começa com "ya29."). Não digite sua senha de e-mail — use o OAuth Playground (Step 2) ou a aba "Conector Apps Script" / "Colar do Classroom".'
-    );
+export async function fetchGoogleClassroomFullData(
+  accessToken: string,
+  grants: ClassroomApiGrants = { materials: true, announcements: true, rosters: true }
+): Promise<ClassroomSyncResult> {
+  const token = accessToken.trim();
+  if (!token) throw new Error(SESSION_EXPIRED);
+
+  let courses: any[];
+  try {
+    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', studentId: 'me', pageSize: '100' });
+  } catch (err) {
+    if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+    if (err instanceof ClassroomApiError && err.status === 403) {
+      throw new Error(
+        `O Google negou acesso às turmas (403: ${err.message}). Confira se a Google Classroom API está ativada no projeto e se a sua conta permite o acesso.`
+      );
+    }
+    throw err;
+  }
+  if (courses.length === 0) {
+    throw new Error('Nenhuma turma ativa em que você é aluno foi encontrada nesta conta do Google Classroom.');
   }
 
-  const headers = {
-    Authorization: `Bearer ${cleanToken}`,
-    Accept: 'application/json',
+  const warnings: string[] = [];
+  const failedCourses: string[] = [];
+  const optionalFailures = new Set<string>();
+
+  const optional = async (label: string, run: () => Promise<any[]>): Promise<any[]> => {
+    try {
+      return await run();
+    } catch (err) {
+      if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+      optionalFailures.add(label);
+      return [];
+    }
   };
 
-  const coursesRes = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE&pageSize=30', {
-    headers,
+  const bundles = await mapWithLimit(courses, 3, async (course): Promise<RawCourseBundle | null> => {
+    const id = encodeURIComponent(String(course.id));
+    let courseWork: any[];
+    let submissions: any[];
+    try {
+      [courseWork, submissions] = await Promise.all([
+        classroomListAll(`courses/${id}/courseWork`, 'courseWork', token, { pageSize: '100' }),
+        classroomListAll(`courses/${id}/courseWork/-/studentSubmissions`, 'studentSubmissions', token, {
+          userId: 'me',
+          pageSize: '100',
+        }),
+      ]);
+    } catch (err) {
+      if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+      failedCourses.push(`${course.name || course.id}${err instanceof ClassroomApiError ? ` (${err.status})` : ''}`);
+      return null;
+    }
+
+    const [teachers, materials, announcements] = await Promise.all([
+      grants.rosters
+        ? optional('nomes dos professores', () => classroomListAll(`courses/${id}/teachers`, 'teachers', token, { pageSize: '30' }))
+        : Promise.resolve([]),
+      grants.materials
+        ? optional('materiais', () =>
+            classroomListAll(`courses/${id}/courseWorkMaterials`, 'courseWorkMaterial', token, { pageSize: '100' })
+          )
+        : Promise.resolve([]),
+      grants.announcements
+        ? optional('avisos', () =>
+            // Only the 20 most recent announcements: one page is enough.
+            classroomListAll(`courses/${id}/announcements`, 'announcements', token, { pageSize: '20', orderBy: 'updateTime desc' }, 1)
+          )
+        : Promise.resolve([]),
+    ]);
+
+    return { course, teachers, topics: [], courseWork, submissions, materials, announcements };
   });
 
-  if (!coursesRes.ok) {
-    const errBody = await coursesRes.json().catch(() => ({}));
-    const msg =
-      errBody?.error?.message ||
-      `Erro HTTP ${coursesRes.status} ao acessar Google Classroom API. Verifique se o token possui os escopos do Classroom.`;
-    throw new Error(msg);
+  const okBundles = bundles.filter((b): b is RawCourseBundle => b !== null);
+  if (failedCourses.length > 0) {
+    warnings.push(`Não foi possível ler as atividades de: ${failedCourses.join(', ')}. As demais turmas foram importadas.`);
+  }
+  if (optionalFailures.size > 0) {
+    warnings.push(`Algumas informações extras não puderam ser lidas (${[...optionalFailures].join(', ')}); as atividades foram importadas normalmente.`);
+  }
+  if (okBundles.length === 0) {
+    throw new Error(warnings[0] || 'Não foi possível ler nenhuma turma do Google Classroom.');
   }
 
-  const coursesData = await coursesRes.json();
-  const courses: any[] = Array.isArray(coursesData.courses) ? coursesData.courses : [];
-
-  if (courses.length === 0) {
-    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
-  }
-
-  const bundles: RawCourseBundle[] = await Promise.all(
-    courses.map(async (course) => {
-      const courseId = String(course.id);
-      const [teachersRes, topicsRes, courseWorkRes, submissionsRes, materialsRes, announcementsRes] =
-        await Promise.all([
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/teachers`, { headers }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/topics`, { headers }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=100`, { headers }).catch(() => null),
-          fetch(
-            `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me&pageSize=100`,
-            { headers }
-          ).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?pageSize=50`, {
-            headers,
-          }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/announcements?pageSize=20`, { headers }).catch(
-            () => null
-          ),
-        ]);
-
-      const teachersJson = teachersRes && teachersRes.ok ? await teachersRes.json().catch(() => ({})) : {};
-      const topicsJson = topicsRes && topicsRes.ok ? await topicsRes.json().catch(() => ({})) : {};
-      const courseWorkJson = courseWorkRes && courseWorkRes.ok ? await courseWorkRes.json().catch(() => ({})) : {};
-      const submissionsJson = submissionsRes && submissionsRes.ok ? await submissionsRes.json().catch(() => ({})) : {};
-      const materialsJson = materialsRes && materialsRes.ok ? await materialsRes.json().catch(() => ({})) : {};
-      const announcementsJson =
-        announcementsRes && announcementsRes.ok ? await announcementsRes.json().catch(() => ({})) : {};
-
-      return {
-        course,
-        teachers: Array.isArray(teachersJson.teachers) ? teachersJson.teachers : [],
-        topics: Array.isArray(topicsJson.topic) ? topicsJson.topic : [],
-        courseWork: Array.isArray(courseWorkJson.courseWork) ? courseWorkJson.courseWork : [],
-        submissions: Array.isArray(submissionsJson.studentSubmissions) ? submissionsJson.studentSubmissions : [],
-        materials: Array.isArray(materialsJson.courseWorkMaterial) ? materialsJson.courseWorkMaterial : [],
-        announcements: Array.isArray(announcementsJson.announcements) ? announcementsJson.announcements : [],
-      };
-    })
-  );
-
-  return buildSyncResultFromCourseBundles(bundles, 'google_api');
+  return { ...buildSyncResultFromCourseBundles(okBundles, 'google_api'), warnings };
 }
 
 function parsePortugueseDate(text: string): string | null {
