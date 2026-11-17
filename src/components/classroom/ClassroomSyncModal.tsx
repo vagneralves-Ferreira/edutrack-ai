@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   BookMarked,
@@ -81,6 +81,9 @@ export const ClassroomSyncModal: React.FC = () => {
   const [googleReady, setGoogleReady] = useState<boolean>(() => isGoogleIdentityLoaded());
   const [googleLoadError, setGoogleLoadError] = useState<string | null>(null);
   const googleClientId = getGoogleClientId();
+  /** Lets the user stop waiting for the Google popup (e.g. after really closing it). */
+  const googleAbortRef = useRef<AbortController | null>(null);
+  const [awaitingGoogle, setAwaitingGoogle] = useState<boolean>(false);
   /** Result waiting for the "Turmas novas" review (classes that match no registered subject). */
   const [pendingResult, setPendingResult] = useState<ClassroomSyncResult | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, CourseResolution>>({});
@@ -275,21 +278,37 @@ export const ClassroomSyncModal: React.FC = () => {
     }
 
     setIsLoading(true);
-    setStepStatus('Aguardando sua autorização na janela do Google...');
+    setStepStatus('Aguardando autorização no Google... Conclua as etapas na janela que abriu.');
+    const controller = new AbortController();
+    googleAbortRef.current = controller;
+    setAwaitingGoogle(true);
     // Called synchronously from the click so the browser does not block the popup.
-    const accessPromise = requestClassroomAccess(googleClientId);
+    const accessPromise = requestClassroomAccess(googleClientId, {
+      signal: controller.signal,
+      onPopupMaybeClosed: () =>
+        setStepStatus(
+          'Aguardando autorização no Google... Se a janela ainda estiver aberta (por exemplo em "O Google não verificou este app"), continue por lá. Se você a fechou, clique em Cancelar.'
+        ),
+    });
 
     void (async () => {
       let token: string | null = null;
       try {
         const access = await accessPromise;
+        setAwaitingGoogle(false);
+        googleAbortRef.current = null;
         token = access.accessToken;
-        setStepStatus('Lendo suas turmas, atividades e entregas no Google Classroom...');
-        const result = await fetchGoogleClassroomFullData(token, {
-          materials: access.granted.materials,
-          announcements: access.granted.announcements,
-          rosters: access.granted.rosters,
-        });
+        setStepStatus('Autorizado! Lendo turmas...');
+        const result = await fetchGoogleClassroomFullData(
+          token,
+          {
+            materials: access.granted.materials,
+            announcements: access.granted.announcements,
+            rosters: access.granted.rosters,
+          },
+          setStepStatus
+        );
+        setStepStatus(`${result.stats.coursesCount} turma(s) e ${result.stats.tasksCount} atividade(s) lidas. Preparando importação...`);
         // Data is in memory now: give the token back to Google before writing anything.
         revokeAccessToken(token);
         token = null;
@@ -302,9 +321,13 @@ export const ClassroomSyncModal: React.FC = () => {
         await processResult(result);
       } catch (err: any) {
         setIsLoading(false);
-        setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
+        if (!controller.signal.aborted) {
+          setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
+        }
       } finally {
         if (token) revokeAccessToken(token);
+        setAwaitingGoogle(false);
+        if (googleAbortRef.current === controller) googleAbortRef.current = null;
       }
     })();
   };
@@ -712,9 +735,23 @@ export const ClassroomSyncModal: React.FC = () => {
 
           {/* Progress Status */}
           {isLoading && (
-            <div className="p-4 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center gap-3 text-xs text-violet-200">
+            <div
+              role="status"
+              aria-live="polite"
+              data-testid="classroom-status"
+              className="p-4 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center gap-3 text-xs text-violet-200"
+            >
               <RefreshCw className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-              <span>{stepStatus}</span>
+              <span className="flex-1">{stepStatus}</span>
+              {awaitingGoogle && (
+                <button
+                  type="button"
+                  onClick={() => googleAbortRef.current?.abort()}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-xs font-semibold text-slate-200 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              )}
             </div>
           )}
 

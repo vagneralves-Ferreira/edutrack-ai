@@ -86,11 +86,30 @@ export interface ClassroomAccess {
   missingOptional: string[];
 }
 
+/** How long to keep waiting for the token after GIS reports "popup_closed" (it may be a false alarm). */
+export const POPUP_CLOSED_GRACE_MS = 2 * 60 * 1000;
+
+export interface RequestClassroomAccessOptions {
+  /** Abort to stop waiting (e.g. the user clicked "Cancelar"). */
+  signal?: AbortSignal;
+  /** Called when GIS reports popup_closed but we keep waiting for the token. */
+  onPopupMaybeClosed?: () => void;
+  graceMs?: number;
+}
+
 /**
  * Opens the Google consent popup and resolves with an in-memory access token.
  * Must be called synchronously from a click handler, after loadGoogleIdentityServices() has finished.
+ *
+ * GIS detects a closed popup by polling `window.closed`. Google's own pages send a Cross-Origin-Opener-Policy
+ * header, which makes that check read "closed" while the popup is still open (e.g. on the "Google hasn't
+ * verified this app" screen), so `popup_closed` fires by mistake. It is therefore NOT treated as final:
+ * we keep waiting for the token callback and only fail if nothing arrives within `graceMs`.
  */
-export function requestClassroomAccess(clientId: string): Promise<ClassroomAccess> {
+export function requestClassroomAccess(
+  clientId: string,
+  options: RequestClassroomAccessOptions = {}
+): Promise<ClassroomAccess> {
   const api = oauth2();
   if (!api) {
     return Promise.reject(new Error('O login do Google ainda está carregando. Aguarde um instante e clique de novo.'));
@@ -99,7 +118,34 @@ export function requestClassroomAccess(clientId: string): Promise<ClassroomAcces
     return Promise.reject(new Error('O app ainda não tem o Client ID do Google configurado (VITE_GOOGLE_CLIENT_ID).'));
   }
 
-  return new Promise<ClassroomAccess>((resolve, reject) => {
+  return new Promise<ClassroomAccess>((outerResolve, outerReject) => {
+    let settled = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      settled = true;
+      if (graceTimer) clearTimeout(graceTimer);
+      options.signal?.removeEventListener('abort', onAbort);
+    };
+    const resolve = (value: ClassroomAccess) => {
+      if (settled) {
+        revokeAccessToken(value.accessToken); // arrived after we gave up: don't keep it
+        return;
+      }
+      finish();
+      outerResolve(value);
+    };
+    const reject = (err: Error) => {
+      if (settled) return;
+      finish();
+      outerReject(err);
+    };
+    const onAbort = () => reject(new Error('Login com Google cancelado.'));
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    options.signal?.addEventListener('abort', onAbort);
+
     const client = api.initTokenClient({
       client_id: clientId,
       scope: Object.values(CLASSROOM_SCOPES).join(' '),
@@ -140,10 +186,17 @@ export function requestClassroomAccess(clientId: string): Promise<ClassroomAcces
         if (type === 'popup_failed_to_open') {
           reject(new Error('O navegador bloqueou a janela do Google. Permita pop-ups para este site e clique de novo.'));
         } else if (type === 'popup_closed') {
-          reject(
-            new Error(
-              'A janela do Google foi fechada antes de concluir. Se ela mostrou "Erro 400: origin_mismatch", este endereço ainda não está nas Origens JavaScript autorizadas do Client ID.'
-            )
+          // Possibly a false alarm (COOP): keep waiting for the token callback for a while.
+          if (graceTimer || settled) return;
+          options.onPopupMaybeClosed?.();
+          graceTimer = setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Não recebemos a autorização do Google. Se a janela foi fechada antes de concluir, clique em "Entrar com Google" de novo. Se ela mostrou "Erro 400: origin_mismatch", este endereço ainda não está nas Origens JavaScript autorizadas do Client ID.'
+                )
+              ),
+            options.graceMs ?? POPUP_CLOSED_GRACE_MS
           );
         } else {
           reject(new Error(`Falha no login do Google${type ? ` (${type})` : ''}.`));

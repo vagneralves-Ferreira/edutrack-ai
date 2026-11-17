@@ -546,12 +546,14 @@ const SESSION_EXPIRED =
  */
 export async function fetchGoogleClassroomFullData(
   accessToken: string,
-  grants: ClassroomApiGrants = { materials: true, announcements: true, rosters: true }
+  grants: ClassroomApiGrants = { materials: true, announcements: true, rosters: true },
+  onProgress?: (message: string) => void
 ): Promise<ClassroomSyncResult> {
   const token = accessToken.trim();
   if (!token) throw new Error(SESSION_EXPIRED);
 
   let courses: any[];
+  onProgress?.('Lendo suas turmas no Google Classroom...');
   try {
     courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', studentId: 'me', pageSize: '100' });
   } catch (err) {
@@ -570,6 +572,14 @@ export async function fetchGoogleClassroomFullData(
   const warnings: string[] = [];
   const failedCourses: string[] = [];
   const optionalFailures = new Set<string>();
+  const total = courses.length;
+  let done = 0;
+  const courseLabel = `${total} turma${total === 1 ? '' : 's'} encontrada${total === 1 ? '' : 's'}`;
+  onProgress?.(`${courseLabel}. Lendo atividades e entregas (0 de ${total})...`);
+  const markCourseDone = () => {
+    done++;
+    onProgress?.(`${courseLabel}. Lendo atividades e entregas (${done} de ${total})...`);
+  };
 
   const optional = async (label: string, run: () => Promise<any[]>): Promise<any[]> => {
     try {
@@ -596,6 +606,7 @@ export async function fetchGoogleClassroomFullData(
     } catch (err) {
       if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
       failedCourses.push(`${course.name || course.id}${err instanceof ClassroomApiError ? ` (${err.status})` : ''}`);
+      markCourseDone();
       return null;
     }
 
@@ -616,6 +627,7 @@ export async function fetchGoogleClassroomFullData(
         : Promise.resolve([]),
     ]);
 
+    markCourseDone();
     return { course, teachers, topics: [], courseWork, submissions, materials, announcements };
   });
 
