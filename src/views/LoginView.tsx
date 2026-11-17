@@ -161,13 +161,14 @@ export const LoginView: React.FC = () => {
       <div className="w-full max-w-4xl">
         <div className="relative z-10 w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
-        <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
+        {/* login-brand-panel: opaque purple gradient in light mode (see index.css) so white text keeps WCAG AA contrast. */}
+        <div className="login-brand-panel hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
           <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -right-20 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
 
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/[0.12] mb-6">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
+            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 mb-6">
+              <Sparkles className="w-4 h-4 text-cyan-200" />
               <span className="text-xs font-extrabold tracking-wide text-white">EDUTRACK AI 2.0</span>
             </div>
 
@@ -177,19 +178,20 @@ export const LoginView: React.FC = () => {
                 Inteligente
               </span>
             </h2>
-            {/* text-white/xx is intentionally not remapped by the html.light overrides: this panel stays dark in both themes. */}
+            {/* Classes here (text-white/90, bg-white/10, border-white/20, *-200 icons) are deliberately ones the
+                html.light overrides do not remap: this panel stays dark in both themes. */}
             <p className="text-sm text-white/90 mt-3 leading-relaxed">
               Planejamento em Bento Grid integrado ao Supabase e Gemini AI para organizar disciplinas, entregas e estudos de qualquer faculdade.
             </p>
           </div>
 
           <div className="relative z-10 space-y-2.5 text-xs text-white/90">
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
+              <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
               <span>Sincronização em nuvem via Supabase</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-              <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
+              <CheckCircle2 className="w-4 h-4 text-cyan-200 shrink-0" />
               <span>Dicas de estudo com Gemini AI em tempo real</span>
             </div>
           </div>
