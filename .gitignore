@@ -34,3 +34,5 @@ edutrack-ai/
 *.sw?
 
 supabase/.temp/
+.vercel
+.env*
