@@ -8,12 +8,34 @@ import { isInnovationLabSubject } from '../utils/helpers';
 import confetti from 'canvas-confetti';
 import { isCorruptedCodeTask, type ClassroomSyncResult } from '../services/classroomSync';
 import {
-  findMatchingSubject,
+  autoResolveCourse,
+  ignoredKeysForSubject,
   normalizeText,
   planClassroomTaskWrites,
   type ExistingTaskRow,
   type IncomingClassroomTask,
 } from '../services/classroomImport';
+import {
+  addIgnoredCourses,
+  loadIgnoredCourses,
+  removeIgnoredCourses,
+  type IgnoredCourse,
+} from '../services/ignoredCourses';
+
+export interface SubjectEditInput {
+  code: string;
+  name: string;
+  professor: string;
+  schedule: string;
+}
+
+export interface SubjectDeleteSummary {
+  deletedTasks: number;
+  /** The subject had Classroom activities: its class is now ignored by the next syncs. */
+  ignoredInClassroom: boolean;
+  /** 'local' = remembered only in this browser (migration not applied yet). */
+  ignoredStorage?: 'db' | 'local';
+}
 
 /** What to do with one Classroom class when importing (chosen in the "Turmas novas" review). */
 export type CourseResolution =
@@ -55,6 +77,14 @@ interface PlannerContextType {
   studentName: string;
   setStudentName: (name: string) => void;
   addSubject: (subjectData: NewSubjectInput) => Subject;
+  /** Saves name/code/professor/schedule in Supabase. Resolves with a warning when only part could be saved. */
+  updateSubject: (subjectId: string, input: SubjectEditInput) => Promise<{ warning?: string }>;
+  /** Deletes the subject and its tasks (same user_id only). */
+  deleteSubject: (subjectId: string) => Promise<SubjectDeleteSummary>;
+  /** Classroom classes the student ignored (not recreated by the next sync). */
+  ignoredCourses: IgnoredCourse[];
+  /** "Voltar a importar": forget the ignore for every key saved under this class name. */
+  restoreIgnoredCourse: (courseName: string) => Promise<void>;
   addTask: (task: Omit<Task, 'id'>) => void;
   applyClassroomSyncResult: (
     result: ClassroomSyncResult,
@@ -131,8 +161,9 @@ function normalizeSubject(raw: any): Subject {
     studyTimeHours: typeof raw.studyTimeHours === 'number' ? raw.studyTimeHours : 0,
     color: raw.color || matchedInitial?.color || '#3b82f6',
     accentColor: raw.accentColor || matchedInitial?.accentColor || 'from-sky-500 to-blue-600',
-    nextClass: raw.nextClass || matchedInitial?.nextClass || 'A definir • 19:15',
-    schedule: raw.schedule || matchedInitial?.schedule || 'Semestre 2026.2 • 19:15 - 22:00',
+    // public.subjects.horario (edited by the student) wins over the defaults.
+    nextClass: raw.horario || raw.nextClass || matchedInitial?.nextClass || 'A definir • 19:15',
+    schedule: raw.horario || raw.schedule || matchedInitial?.schedule || 'Semestre 2026.2 • 19:15 - 22:00',
     room: raw.room || matchedInitial?.room || 'Campus Paulista / Online',
     description:
       raw.description ||
@@ -316,6 +347,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
   const [isPlannerReady, setIsPlannerReady] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [ignoredCourses, setIgnoredCourses] = useState<IgnoredCourse[]>([]);
 
   /** Replaces subjects/tasks in state (and the local cache) with rows read from Supabase. */
   const applyDbSnapshot = (dbSubjects: any[], dbTasks: any[], extraSubjectData?: Map<string, Subject>) => {
@@ -360,6 +392,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedSubject(scopedSubs[0] || null);
     setTasks(scopedTasks);
     setLastClassroomSync(scopedSync);
+    setIgnoredCourses([]);
     setLoadError(null);
     setStudentNameState((nameKey && localStorage.getItem(nameKey)) || currentUser?.name || 'Estudante');
   }, [userId]);
@@ -415,6 +448,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         applyDbSnapshot(dbSubjects || [], dbTasks || []);
+        // Loaded before isPlannerReady, so an import right after the Google redirect already skips them.
+        setIgnoredCourses(await loadIgnoredCourses(userId));
       } catch (err: any) {
         setLoadError(err?.message || 'Erro ao conectar com o Supabase.');
       } finally {
@@ -678,16 +713,22 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const draftToUuid = new Map<string, string | null>();
       const classroomDataBySubjectName = new Map<string, Subject>();
       let subjectsCreated = 0;
-      let ignoredCourses = 0;
+      let ignoredCount = 0;
 
+      const ignoredKeys = new Set(ignoredCourses.map((c) => c.courseKey));
       for (const draft of result.subjects) {
-        const auto = findMatchingSubject(draft, subjects);
+        const auto = autoResolveCourse(draft, subjects, tasks, ignoredKeys);
         const resolution: CourseResolution =
-          resolutions[draft.id] || (auto ? { action: 'link', subjectId: auto.id } : { action: 'create' });
+          resolutions[draft.id] ||
+          (auto?.kind === 'link'
+            ? { action: 'link', subjectId: auto.subject.id }
+            : auto?.kind === 'ignored'
+            ? { action: 'ignore' }
+            : { action: 'create' });
 
         if (resolution.action === 'ignore') {
           draftToUuid.set(draft.id, null);
-          ignoredCourses++;
+          ignoredCount++;
           continue;
         }
 
@@ -751,7 +792,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const meta: ClassroomSyncMetadata = {
         timestamp: new Date().toLocaleString('pt-BR'),
-        coursesCount: result.subjects.length - ignoredCourses,
+        coursesCount: result.subjects.length - ignoredCount,
         tasksCount: incoming.length,
         materialsCount: result.stats.materialsCount,
         evaluationsCount: result.stats.evaluationsCount,
@@ -773,12 +814,138 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         inserted: plan.inserts.length,
         updated: plan.updates.length,
         subjectsCreated,
-        ignoredCourses,
+        ignoredCourses: ignoredCount,
         skippedTasks,
       };
     } finally {
       syncInFlightRef.current = false;
     }
+  };
+
+  /** public.subjects rows behind one subject on screen (same id, or same name: the list hides duplicates). */
+  const findDbSubjectRows = async (uid: string, subject: Subject) => {
+    const { data, error } = await supabase.from('subjects').select('id, nome, codigo').eq('user_id', uid);
+    if (error) throw new Error(`Erro ao ler disciplinas: ${error.message}`);
+    return (data || []).filter(
+      (row: any) => row.id === subject.id || normalizeText(row.nome) === normalizeText(subject.name)
+    ) as { id: string; nome: string; codigo: string }[];
+  };
+
+  const updateSubject = async (subjectId: string, input: SubjectEditInput): Promise<{ warning?: string }> => {
+    const subject = subjects.find((s) => s.id === subjectId);
+    if (!subject) throw new Error('Disciplina não encontrada.');
+    const name = input.name.trim();
+    const code = input.code.trim();
+    if (!name || !code) throw new Error('Preencha o código e o nome da disciplina.');
+    const clash = subjects.find(
+      (s) =>
+        s.id !== subjectId &&
+        (normalizeText(s.name) === normalizeText(name) || s.code.trim().toLowerCase() === code.toLowerCase())
+    );
+    if (clash) throw new Error(`Já existe a disciplina "${clash.name}" com esse nome ou código.`);
+    const professors = input.professor
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (professors.length === 0) professors.push('Prof. Responsável');
+    const schedule = input.schedule.trim();
+
+    let warning: string | undefined;
+    if (userId) {
+      const ids = (await findDbSubjectRows(userId, subject)).map((r) => r.id);
+      if (ids.length > 0) {
+        const base = { codigo: code, nome: name, professor: professors.join(', ') };
+        let { error } = await supabase
+          .from('subjects')
+          .update({ ...base, horario: schedule || null })
+          .eq('user_id', userId)
+          .in('id', ids);
+        if (error && /horario/i.test(error.message)) {
+          // Migration 20261117000000 not applied yet: save the rest and say the schedule was not stored.
+          ({ error } = await supabase.from('subjects').update(base).eq('user_id', userId).in('id', ids));
+          if (!error) {
+            warning =
+              'Nome, código e professor foram salvos. O horário não foi salvo no Supabase porque falta rodar a migration supabase/migrations/20261117000000_subject_schedule_and_ignored_courses.sql (ele volta ao padrão ao recarregar).';
+          }
+        }
+        if (error) throw new Error(`Erro ao salvar a disciplina: ${error.message}`);
+      }
+    }
+
+    const apply = (s: Subject): Subject => ({
+      ...s,
+      code,
+      name,
+      professors,
+      nextClass: schedule || 'Horário a definir',
+      schedule: schedule || s.schedule,
+    });
+    setSubjects((prev) => prev.map((s) => (s.id === subjectId ? apply(s) : s)));
+    setSelectedSubject((prev) => (prev?.id === subjectId ? apply(prev) : prev));
+    setTasks((prev) => prev.map((t) => (t.subjectId === subjectId ? { ...t, subjectName: name } : t)));
+    return { warning };
+  };
+
+  const deleteSubject = async (subjectId: string): Promise<SubjectDeleteSummary> => {
+    const subject = subjects.find((s) => s.id === subjectId);
+    if (!subject) throw new Error('Disciplina não encontrada.');
+    if (!userId) throw new Error('Sessão expirada. Entre novamente para excluir a disciplina.');
+
+    const ids = (await findDbSubjectRows(userId, subject)).map((r) => r.id);
+    let dbTasks: { id: string; classroom_id: string | null; importado_classroom: boolean }[] = [];
+    if (ids.length > 0) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, classroom_id, importado_classroom')
+        .eq('user_id', userId)
+        .in('subject_id', ids);
+      if (error) throw new Error(`Erro ao ler as tarefas da disciplina: ${error.message}`);
+      dbTasks = (data || []) as typeof dbTasks;
+
+      // Tasks first (only this subject's, only this user's), then the subject itself.
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', userId)
+        .in('subject_id', ids);
+      if (tasksError) throw new Error(`Erro ao excluir as tarefas da disciplina: ${tasksError.message}`);
+      const { error: subjectError } = await supabase.from('subjects').delete().eq('user_id', userId).in('id', ids);
+      if (subjectError) throw new Error(`Erro ao excluir a disciplina: ${subjectError.message}`);
+    }
+
+    const localTasks = tasks.filter((t) => t.subjectId === subjectId);
+    const fromClassroom =
+      dbTasks.some((t) => t.classroom_id || t.importado_classroom) ||
+      localTasks.some((t) => t.importedFromClassroom || t.classroomId);
+
+    let ignoredStorage: 'db' | 'local' | undefined;
+    if (fromClassroom) {
+      const keys = ignoredKeysForSubject(subject.name, [
+        ...dbTasks.map((t) => t.classroom_id),
+        ...localTasks.map((t) => t.classroomId),
+      ]);
+      const items = keys.map((courseKey) => ({ courseKey, courseName: subject.name }));
+      ignoredStorage = await addIgnoredCourses(userId, items);
+      setIgnoredCourses((prev) => [...prev.filter((c) => !keys.includes(c.courseKey)), ...items]);
+    }
+
+    const deletedIds = new Set(dbTasks.map((t) => t.id));
+    setSubjects((prev) => prev.filter((s) => s.id !== subjectId));
+    setSelectedSubject((prev) => (prev?.id === subjectId ? null : prev));
+    setTasks((prev) => prev.filter((t) => t.subjectId !== subjectId && !deletedIds.has(t.id)));
+
+    return {
+      deletedTasks: ids.length > 0 ? dbTasks.length : localTasks.length,
+      ignoredInClassroom: fromClassroom,
+      ignoredStorage,
+    };
+  };
+
+  const restoreIgnoredCourse = async (courseName: string) => {
+    if (!userId) return;
+    const keys = ignoredCourses.filter((c) => c.courseName === courseName).map((c) => c.courseKey);
+    await removeIgnoredCourses(userId, keys);
+    setIgnoredCourses((prev) => prev.filter((c) => !keys.includes(c.courseKey)));
   };
 
   const updateTaskStatus = (id: string, status: TaskStatus) => {
@@ -969,6 +1136,10 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         studentName,
         setStudentName,
         addSubject,
+        updateSubject,
+        deleteSubject,
+        ignoredCourses,
+        restoreIgnoredCourse,
         addTask,
         applyClassroomSyncResult,
         isClassroomModalOpen,

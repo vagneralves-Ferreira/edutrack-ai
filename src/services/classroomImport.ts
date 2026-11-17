@@ -66,6 +66,50 @@ export function findMatchingSubject(
   return contained[0] || null;
 }
 
+/** Keys that identify a Classroom class the student chose to ignore (see public.classroom_ignored_courses). */
+export function ignoredKeysForCourse(course: { id: string; name: string }): string[] {
+  const keys = [`name:${normalizeText(course.name)}`];
+  if (course.id.startsWith('gc-course:')) keys.unshift(course.id);
+  return keys;
+}
+
+/** Keys to remember when a subject that came from Classroom is deleted: its classes (from task keys) + its name. */
+export function ignoredKeysForSubject(subjectName: string, taskClassroomIds: (string | null | undefined)[]): string[] {
+  const keys = new Set<string>();
+  for (const id of taskClassroomIds) {
+    const m = /^gc:([^:]+):/.exec(String(id || ''));
+    if (m) keys.add(`gc-course:${m[1]}`);
+  }
+  keys.add(`name:${normalizeText(subjectName)}`);
+  return [...keys];
+}
+
+export type AutoCourseResolution<S> = { kind: 'link'; subject: S } | { kind: 'ignored' } | null;
+
+/**
+ * What happens to a Classroom class without asking the student:
+ * 1. linked to the subject that already holds its activities (survives renaming the subject);
+ * 2. linked by name/code (findMatchingSubject);
+ * 3. ignored, if the student deleted/ignored it before;
+ * otherwise null → shown in "Turmas novas".
+ */
+export function autoResolveCourse<S extends Pick<Subject, 'id' | 'name' | 'code'>>(
+  course: { id: string; name: string; code?: string },
+  subjects: S[],
+  tasks: { subjectId: string; classroomId?: string }[],
+  ignoredKeys: Set<string>
+): AutoCourseResolution<S> {
+  if (course.id.startsWith('gc-course:')) {
+    const prefix = `gc:${course.id.slice('gc-course:'.length)}:`;
+    const owner = tasks.find((t) => t.classroomId?.startsWith(prefix) && subjects.some((s) => s.id === t.subjectId));
+    if (owner) return { kind: 'link', subject: subjects.find((s) => s.id === owner.subjectId)! };
+  }
+  const byName = findMatchingSubject(course, subjects) as S | null;
+  if (byName) return { kind: 'link', subject: byName };
+  if (ignoredKeysForCourse(course).some((k) => ignoredKeys.has(k))) return { kind: 'ignored' };
+  return null;
+}
+
 export interface IncomingClassroomTask {
   classroomId: string;
   title: string;

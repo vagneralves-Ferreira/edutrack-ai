@@ -28,7 +28,7 @@ import {
   parseClassroomPastedContent,
   type ClassroomSyncResult,
 } from '../../services/classroomSync';
-import { findMatchingSubject } from '../../services/classroomImport';
+import { autoResolveCourse } from '../../services/classroomImport';
 import {
   consumeClassroomRedirectResult,
   GoogleScopeError,
@@ -81,11 +81,15 @@ export const ClassroomSyncModal: React.FC = () => {
     applyClassroomSyncResult,
     lastClassroomSync,
     isPlannerReady,
+    tasks,
+    ignoredCourses,
+    restoreIgnoredCourse,
   } = usePlanner();
   // Always-current values for async flows (the redirect import starts right after a page load, before the
   // subjects have been read from Supabase; closures from that first render would see an empty list).
-  const latestRef = useRef({ subjects, apply: applyClassroomSyncResult, ready: isPlannerReady });
-  latestRef.current = { subjects, apply: applyClassroomSyncResult, ready: isPlannerReady };
+  const latestRef = useRef({ subjects, tasks, ignoredCourses, apply: applyClassroomSyncResult, ready: isPlannerReady });
+  latestRef.current = { subjects, tasks, ignoredCourses, apply: applyClassroomSyncResult, ready: isPlannerReady };
+  const ignoredCourseNames = [...new Set(ignoredCourses.map((c) => c.courseName))];
 
   const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('google_api');
   const [googleReady, setGoogleReady] = useState<boolean>(() => isGoogleIdentityLoaded());
@@ -173,8 +177,30 @@ export const ClassroomSyncModal: React.FC = () => {
   const countTasks = (result: ClassroomSyncResult, draftId: string) =>
     result.tasks.filter((t) => t.subjectId === draftId).length;
 
-  const autoMatches = (result: ClassroomSyncResult) =>
-    result.subjects.map((draft) => ({ draft, match: findMatchingSubject(draft, latestRef.current.subjects) as Subject | null }));
+  /** Same rules as the import: linked (by activities or name), previously ignored, or new (→ review). */
+  const autoMatches = (result: ClassroomSyncResult) => {
+    const { subjects: subs, tasks: currentTasks, ignoredCourses: ignored } = latestRef.current;
+    const ignoredKeys = new Set(ignored.map((c) => c.courseKey));
+    return result.subjects.map((draft) => {
+      const auto = autoResolveCourse(draft, subs, currentTasks, ignoredKeys);
+      return {
+        draft,
+        match: (auto?.kind === 'link' ? auto.subject : null) as Subject | null,
+        ignored: auto?.kind === 'ignored',
+      };
+    });
+  };
+  const isNewCourse = (m: { match: Subject | null; ignored: boolean }) => !m.match && !m.ignored;
+
+  const handleRestoreIgnored = async (courseName: string) => {
+    setErrorMsg(null);
+    try {
+      await restoreIgnoredCourse(courseName);
+      setSuccessMsg(`A turma "${courseName}" volta a aparecer na próxima sincronização (em "Turmas novas").`);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Não foi possível voltar a importar a turma.');
+    }
+  };
 
   /** Writes the result; throws are shown in the modal. */
   const runApply = async (result: ClassroomSyncResult, chosen: Record<string, CourseResolution>) => {
@@ -198,7 +224,7 @@ export const ClassroomSyncModal: React.FC = () => {
    */
   const processResult = async (result: ClassroomSyncResult) => {
     const matches = autoMatches(result);
-    const unmatched = matches.filter((m) => !m.match);
+    const unmatched = matches.filter(isNewCourse);
     if (unmatched.length === 0) {
       await runApply(result, {});
       return;
@@ -521,7 +547,7 @@ export const ClassroomSyncModal: React.FC = () => {
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3" data-testid="classroom-review">
               <div>
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
-                  Turmas novas ({autoMatches(pendingResult).filter((m) => !m.match).length})
+                  Turmas novas ({autoMatches(pendingResult).filter(isNewCourse).length})
                 </h4>
                 <p className="text-[11px] text-slate-300 mt-1">
                   Estas turmas do Classroom não correspondem a nenhuma disciplina cadastrada. Escolha o que fazer com
@@ -531,7 +557,7 @@ export const ClassroomSyncModal: React.FC = () => {
 
               <ul className="space-y-2">
                 {autoMatches(pendingResult)
-                  .filter((m) => !m.match)
+                  .filter(isNewCourse)
                   .map(({ draft }) => (
                     <li
                       key={draft.id}
@@ -568,6 +594,21 @@ export const ClassroomSyncModal: React.FC = () => {
                       .map(({ draft, match }) => (
                         <li key={draft.id}>
                           {draft.name} → {match!.name} ({countTasks(pendingResult, draft.id)} atividade(s))
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
+              {autoMatches(pendingResult).some((m) => m.ignored) && (
+                <div className="text-[11px] text-slate-400">
+                  <p className="font-semibold text-slate-300">Ignoradas (você excluiu ou ignorou antes):</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {autoMatches(pendingResult)
+                      .filter((m) => m.ignored)
+                      .map(({ draft }) => (
+                        <li key={draft.id}>
+                          {draft.name} ({countTasks(pendingResult, draft.id)} atividade(s) não importada(s))
                         </li>
                       ))}
                   </ul>
@@ -883,6 +924,33 @@ export const ClassroomSyncModal: React.FC = () => {
             <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-300">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
               <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Classes the student deleted/ignored: skipped by every sync until restored here */}
+          {!pendingResult && ignoredCourseNames.length > 0 && (
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-2" data-testid="ignored-courses">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Turmas ignoradas ({ignoredCourseNames.length})
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Não são importadas nas sincronizações. Clique em "Voltar a importar" para que apareçam de novo em "Turmas novas".
+              </p>
+              <ul className="space-y-1.5">
+                {ignoredCourseNames.map((name) => (
+                  <li key={name} className="flex items-center justify-between gap-2 text-xs text-slate-200">
+                    <span className="truncate">{name}</span>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => handleRestoreIgnored(name)}
+                      className="shrink-0 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-[11px] font-semibold text-slate-200 cursor-pointer disabled:opacity-50"
+                    >
+                      Voltar a importar
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

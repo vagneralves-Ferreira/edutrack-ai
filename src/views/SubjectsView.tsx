@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
 import { AiDica } from '../components/AiDica';
 import { EmptyPlannerState } from '../components/EmptyPlannerState';
@@ -7,7 +8,27 @@ import { formatDateBR } from '../utils/helpers';
 import type { StudyMaterial } from '../types';
 
 export const SubjectsView: React.FC = () => {
-  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus, loadError } = usePlanner();
+  const {
+    subjects,
+    tasks,
+    selectedSubject,
+    setSelectedSubject,
+    addSubject,
+    updateSubject,
+    deleteSubject,
+    setIsClassroomModalOpen,
+    updateTaskStatus,
+    loadError,
+  } = usePlanner();
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editCode, setEditCode] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editProf, setEditProf] = useState('');
+  const [editSchedule, setEditSchedule] = useState('');
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'success' | 'warning'; text: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterial | null>(null);
   const [newCode, setNewCode] = useState('');
@@ -37,6 +58,71 @@ export const SubjectsView: React.FC = () => {
     setNewProf('');
     setIsSubmittingSubject(false);
     setIsModalOpen(false);
+  };
+
+  const isDefaultSchedule = (value?: string) => !value || /^(a definir|hor[aá]rio a definir)/i.test(value.trim());
+
+  const openEdit = () => {
+    if (!activeSubject) return;
+    setEditCode(activeSubject.code);
+    setEditName(activeSubject.name);
+    setEditProf(
+      (activeSubject.professors || []).filter((p) => p !== 'Prof. Responsável').join(', ')
+    );
+    setEditSchedule(isDefaultSchedule(activeSubject.nextClass) ? '' : activeSubject.nextClass);
+    setDialogError(null);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSubject || isBusy) return;
+    setIsBusy(true);
+    setDialogError(null);
+    try {
+      const { warning } = await updateSubject(activeSubject.id, {
+        code: editCode,
+        name: editName,
+        professor: editProf,
+        schedule: editSchedule,
+      });
+      setIsEditOpen(false);
+      setNotice(warning ? { kind: 'warning', text: warning } : { kind: 'success', text: `Disciplina "${editName.trim()}" atualizada.` });
+    } catch (err: any) {
+      setDialogError(err?.message || 'Não foi possível salvar a disciplina.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const activeFromClassroom = subjectTasks.some((t) => t.importedFromClassroom || t.classroomId);
+
+  const openDelete = () => {
+    setDialogError(null);
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!activeSubject || isBusy) return;
+    const name = activeSubject.name;
+    setIsBusy(true);
+    setDialogError(null);
+    try {
+      const summary = await deleteSubject(activeSubject.id);
+      setIsConfirmDeleteOpen(false);
+      let text = `Disciplina "${name}" excluída com ${summary.deletedTasks} tarefa(s).`;
+      if (summary.ignoredInClassroom) {
+        text +=
+          summary.ignoredStorage === 'local'
+            ? ' A turma do Classroom será ignorada nas próximas sincronizações neste navegador (rode a migration 20261117000000 para valer em todos os dispositivos).'
+            : ' A turma do Classroom será ignorada nas próximas sincronizações (dá para voltar a importar na Central do Classroom).';
+      }
+      setNotice({ kind: 'success', text });
+    } catch (err: any) {
+      setDialogError(err?.message || 'Não foi possível excluir a disciplina.');
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const getProfessorLabel = (sub: any) => {
@@ -87,6 +173,23 @@ export const SubjectsView: React.FC = () => {
           disciplinaSelecionada: activeSubject?.name,
         }}
       />
+
+      {notice && (
+        <div
+          role="status"
+          data-testid="subjects-notice"
+          className={`p-4 rounded-2xl border text-xs flex items-start justify-between gap-3 ${
+            notice.kind === 'success'
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+              : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} className="shrink-0 cursor-pointer opacity-80 hover:opacity-100">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {loadError && (
         <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
@@ -152,6 +255,29 @@ export const SubjectsView: React.FC = () => {
                 >
                   {activeSubject.progress}% Concluído
                 </span>
+              </div>
+
+              <div className="flex justify-end gap-2 -mt-1 mb-2">
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  title="Editar disciplina"
+                  aria-label="Editar disciplina"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 text-[11px] font-semibold cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Editar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openDelete}
+                  title="Excluir disciplina"
+                  aria-label="Excluir disciplina"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-[11px] font-semibold cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir</span>
+                </button>
               </div>
 
               <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{activeSubject.name}</h2>
@@ -403,6 +529,141 @@ export const SubjectsView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Portals: the page wrapper's animation creates a stacking context that would put dialogs under the sticky header */}
+      {isEditOpen && activeSubject && createPortal(
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in">
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-subject-title" className="bento-card rounded-2xl w-full max-w-md p-7 shadow-2xl relative">
+            <button
+              type="button"
+              aria-label="Fechar"
+              onClick={() => setIsEditOpen(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 id="edit-subject-title" className="text-lg font-bold text-white mb-5">Editar disciplina</h3>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label htmlFor="edit-subject-code" className="block text-xs font-semibold text-slate-300 mb-1.5">Código / Sigla</label>
+                <input
+                  id="edit-subject-code"
+                  type="text"
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-subject-name" className="block text-xs font-semibold text-slate-300 mb-1.5">Nome da Disciplina</label>
+                <input
+                  id="edit-subject-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-subject-prof" className="block text-xs font-semibold text-slate-300 mb-1.5">Professor(es)</label>
+                <input
+                  id="edit-subject-prof"
+                  type="text"
+                  placeholder="Ex: Prof. Ana Lima, Prof. João Silva"
+                  value={editProf}
+                  onChange={(e) => setEditProf(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Separe mais de um professor com vírgula.</p>
+              </div>
+              <div>
+                <label htmlFor="edit-subject-schedule" className="block text-xs font-semibold text-slate-300 mb-1.5">Horário</label>
+                <input
+                  id="edit-subject-schedule"
+                  type="text"
+                  placeholder="Ex: Seg e Qua • 19:15 - 22:00"
+                  value={editSchedule}
+                  onChange={(e) => setEditSchedule(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+              </div>
+              {dialogError && (
+                <p role="alert" className="text-xs text-rose-300 bg-rose-500/15 border border-rose-500/30 rounded-xl p-3">{dialogError}</p>
+              )}
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isBusy}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer"
+                >
+                  {isBusy ? 'Salvando...' : 'Salvar alterações'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isConfirmDeleteOpen && activeSubject && createPortal(
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-subject-title" className="bento-card rounded-2xl w-full max-w-md p-7 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-2">
+                <h3 id="delete-subject-title" className="text-base font-bold text-white">
+                  Excluir '{activeSubject.name}' e {subjectTasks.length === 1 ? 'sua 1 tarefa' : `suas ${subjectTasks.length} tarefas`}? Essa ação não pode ser desfeita.
+                </h3>
+                <p className="text-xs text-slate-400">
+                  As tarefas desta disciplina serão apagadas do Kanban e do Supabase. As outras disciplinas não são afetadas.
+                </p>
+                {activeFromClassroom && (
+                  <p className="text-xs text-amber-300 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Ela veio do Google Classroom: a turma será ignorada nas próximas sincronizações, para não ser recriada.
+                      Dá para voltar a importar na Central do Classroom.
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            {dialogError && (
+              <p role="alert" className="mt-4 text-xs text-rose-300 bg-rose-500/15 border border-rose-500/30 rounded-xl p-3">{dialogError}</p>
+            )}
+            <div className="flex justify-end gap-3 pt-5">
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => setIsConfirmDeleteOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer"
+              >
+                {isBusy ? 'Excluindo...' : 'Excluir disciplina'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {selectedMaterial && (
