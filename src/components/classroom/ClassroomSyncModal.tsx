@@ -23,7 +23,8 @@ import { useAuth } from '../../context/AuthContext';
 import {
   fetchGoogleClassroomFullData,
   fetchGoogleAppsScriptClassroom,
-  APPS_SCRIPT_BRIDGE_CODE,
+  buildAppsScriptCode,
+  generateAppsScriptToken,
   parseClassroomPastedContent,
   type ClassroomSyncResult,
 } from '../../services/classroomSync';
@@ -69,6 +70,12 @@ export const ClassroomSyncModal: React.FC = () => {
     () => (userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '')
   );
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
+  // Secret the Apps Script checks before answering. Kept only in this browser, like the script URL.
+  const [scriptToken, setScriptToken] = useState<string>(
+    () => (userId ? localStorage.getItem(`edutrack_apps_script_token_${userId}`) || '' : '')
+  );
+  const [showToken, setShowToken] = useState<boolean>(false);
+  const [warnMsg, setWarnMsg] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string>(
     () => (userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '')
   );
@@ -83,6 +90,9 @@ export const ClassroomSyncModal: React.FC = () => {
 
   useEffect(() => {
     setAppsScriptUrl(userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '');
+    setScriptToken(userId ? localStorage.getItem(`edutrack_apps_script_token_${userId}`) || '' : '');
+    setShowToken(false);
+    setWarnMsg(null);
     setAccessToken(userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '');
     setGoogleClientId(userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '');
     setErrorMsg(null);
@@ -142,13 +152,43 @@ export const ClassroomSyncModal: React.FC = () => {
   const resolutionValue = (r?: CourseResolution) =>
     !r || r.action === 'create' ? 'create' : r.action === 'ignore' ? 'ignore' : r.subjectId;
 
+  const saveScriptToken = (value: string) => {
+    setScriptToken(value);
+    if (userId) {
+      try {
+        if (value) localStorage.setItem(`edutrack_apps_script_token_${userId}`, value);
+        else localStorage.removeItem(`edutrack_apps_script_token_${userId}`);
+      } catch {
+        // storage unavailable: the token still works for this session
+      }
+    }
+  };
+
+  const handleGenerateToken = () => {
+    if (
+      scriptToken &&
+      !window.confirm(
+        'Gerar um novo token invalida o atual. Depois será preciso copiar o script de novo, colar no Apps Script e publicar uma nova versão. Continuar?'
+      )
+    ) {
+      return;
+    }
+    saveScriptToken(generateAppsScriptToken());
+    setCopiedScript(false);
+  };
+
   const handleCopyAppsScript = async () => {
+    setErrorMsg(null);
+    // Copying without a token would hand out a script that rejects every request: create one first.
+    const token = scriptToken || generateAppsScriptToken();
+    if (!scriptToken) saveScriptToken(token);
     try {
-      await navigator.clipboard.writeText(APPS_SCRIPT_BRIDGE_CODE);
+      await navigator.clipboard.writeText(buildAppsScriptCode(token));
       setCopiedScript(true);
       setTimeout(() => setCopiedScript(false), 2500);
     } catch {
-      setErrorMsg('Não foi possível copiar automaticamente. Selecione e copie o script manualmente abaixo.');
+      setShowToken(true);
+      setErrorMsg('Não foi possível copiar automaticamente. Selecione e copie o script manualmente abaixo (o token já está nele).');
     }
   };
 
@@ -169,7 +209,12 @@ export const ClassroomSyncModal: React.FC = () => {
 
     try {
       if (userId) localStorage.setItem(`edutrack_apps_script_url_${userId}`, cleanUrl);
-      const result = await fetchGoogleAppsScriptClassroom(cleanUrl);
+      const result = await fetchGoogleAppsScriptClassroom(cleanUrl, scriptToken);
+      setWarnMsg(
+        result.scriptProtected === false
+          ? 'Seu script está ABERTO: qualquer pessoa com a URL consegue ler seu Classroom. Clique em "Copiar Script" (ele já leva o token), cole no Apps Script e publique em Implantar → Gerenciar implantações → Editar → Nova versão.'
+          : null
+      );
       await processResult(result);
     } catch (err: any) {
       setIsLoading(false);
@@ -506,12 +551,52 @@ export const ClassroomSyncModal: React.FC = () => {
                     Cole o código no editor, clique em <strong>Serviços (+)</strong> à esquerda → adicione <strong>Google Classroom API</strong>.
                   </li>
                   <li>
-                    Clique em <strong>Implantar → Nova implantação → App da Web</strong> (<em>Executar como: Eu</em>, <em>Quem pode acessar: Qualquer pessoa</em>), autorize e cole a URL gerada abaixo:
+                    Clique em <strong>Implantar → Nova implantação → App da Web</strong> (<em>Executar como: Eu</em>, <em>Quem pode acessar: Qualquer pessoa</em>), autorize e cole a URL gerada abaixo.
+                    Se já tinha um script, use <strong>Gerenciar implantações → Editar → Nova versão</strong> para manter a mesma URL.
                   </li>
                 </ol>
 
+                <div className="p-3 rounded-xl bg-black/25 border border-white/[0.08] space-y-2" data-testid="apps-script-token">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor="apps-script-token" className="text-xs font-bold text-slate-200">
+                      Token secreto do script
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateToken}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-xs font-bold text-white cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{scriptToken ? 'Gerar novo token' : 'Gerar token'}</span>
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      id="apps-script-token"
+                      type={showToken ? 'text' : 'password'}
+                      value={scriptToken}
+                      onChange={(e) => saveScriptToken(e.target.value.trim())}
+                      placeholder="Clique em Gerar token (ou cole aqui o token de outro dispositivo)"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="flex-1 min-w-0 bg-black/40 border border-white/[0.12] rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken((v) => !v)}
+                      className="shrink-0 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-slate-200 cursor-pointer"
+                    >
+                      {showToken ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    A URL precisa ficar aberta para "Qualquer pessoa", então o script só responde a quem enviar este token.
+                    Ele fica salvo apenas neste navegador e vai dentro do script copiado.
+                  </p>
+                </div>
+
                 <div className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[11px] font-semibold text-slate-400">Código oficial para colar no Apps Script:</span>
+                  <span className="text-[11px] font-semibold text-slate-400">Código para colar no Apps Script (já com o seu token):</span>
                   <button
                     type="button"
                     onClick={handleCopyAppsScript}
@@ -523,7 +608,9 @@ export const ClassroomSyncModal: React.FC = () => {
                 </div>
 
                 <pre className="max-h-28 overflow-auto rounded-xl bg-black/50 border border-white/[0.08] p-2.5 text-[10px] text-slate-300 font-mono select-all">
-                  {APPS_SCRIPT_BRIDGE_CODE}
+                  {buildAppsScriptCode(
+                    scriptToken ? (showToken ? scriptToken : '•'.repeat(12)) : '(clique em Gerar token)'
+                  )}
                 </pre>
 
                 <div className="space-y-2 pt-1">
@@ -658,6 +745,18 @@ export const ClassroomSyncModal: React.FC = () => {
             <div className="p-4 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center gap-3 text-xs text-violet-200">
               <RefreshCw className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
               <span>{stepStatus}</span>
+            </div>
+          )}
+
+          {/* Open-script warning (Apps Script answered without checking the token) */}
+          {warnMsg && (
+            <div
+              role="alert"
+              data-testid="apps-script-open-warning"
+              className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-start gap-2.5 text-xs text-amber-300"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <span>{warnMsg}</span>
             </div>
           )}
 

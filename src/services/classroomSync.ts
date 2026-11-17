@@ -34,6 +34,8 @@ export interface ClassroomSyncResult {
     announcementsCount: number;
   };
   source: 'google_api' | 'apps_script' | 'custom_import';
+  /** Apps Script only: false when the deployed script answers without checking the secret token. */
+  scriptProtected?: boolean;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -70,7 +72,35 @@ export interface RawCourseBundle {
   announcements: any[];
 }
 
-export const APPS_SCRIPT_BRIDGE_CODE = `function doGet() {
+/** Placeholder replaced by the user's secret token when the script is copied (see buildAppsScriptCode). */
+export const APPS_SCRIPT_TOKEN_PLACEHOLDER = '__EDUTRACK_TOKEN__';
+
+/**
+ * Apps Script bridge. The web app must be deployed as "Anyone" (a browser on another site cannot send the
+ * user's Google cookies), so it only answers a POST whose body carries the secret token generated in EduTrack.
+ * The token travels in the body, never in the URL, so it does not end up in history or request logs.
+ */
+export const APPS_SCRIPT_BRIDGE_CODE = `var EDUTRACK_TOKEN = '${APPS_SCRIPT_TOKEN_PLACEHOLDER}';
+
+function doPost(e) {
+  var body = {};
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) {}
+  if (!EDUTRACK_TOKEN || EDUTRACK_TOKEN.indexOf('__') === 0 || body.token !== EDUTRACK_TOKEN) {
+    return json_({ error: 'unauthorized', protected: true });
+  }
+  return json_({ generatedAt: new Date().toISOString(), protected: true, courses: readClassroom_() });
+}
+
+// GET never returns data: opening the URL in a browser shows only this message.
+function doGet() {
+  return json_({ error: 'use_post', protected: true });
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readClassroom_() {
   var resp = Classroom.Courses.list({ courseStates: ['ACTIVE'], pageSize: 30 });
   var courses = resp.courses || [];
   var result = courses.map(function(c) {
@@ -96,11 +126,22 @@ export const APPS_SCRIPT_BRIDGE_CODE = `function doGet() {
       announcements: announcements
     };
   });
-  return ContentService.createTextOutput(JSON.stringify({
-    generatedAt: new Date().toISOString(),
-    courses: result
-  })).setMimeType(ContentService.MimeType.JSON);
+  return result;
 }`;
+
+/** Script code with the user's token embedded (what "Copiar Script" puts on the clipboard). */
+export function buildAppsScriptCode(token: string): string {
+  return APPS_SCRIPT_BRIDGE_CODE.replace(APPS_SCRIPT_TOKEN_PLACEHOLDER, token);
+}
+
+/** 32 random bytes, base64url (≈43 chars). Generated in the browser; never sent anywhere but the user's script. */
+export function generateAppsScriptToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 const SUBJECT_PALETTES = [
   { color: '#8b5cf6', accentColor: 'from-violet-500 to-indigo-600' },
@@ -387,24 +428,49 @@ export function buildSyncResultFromCourseBundles(
  * Conecta via Web App pessoal do Google Apps Script (https://script.google.com/macros/s/.../exec)
  * que lê diretamente Classroom.Courses, Teachers, CourseWork, Submissions, Materials e Announcements.
  */
-export async function fetchGoogleAppsScriptClassroom(webAppUrl: string): Promise<ClassroomSyncResult> {
+export async function fetchGoogleAppsScriptClassroom(webAppUrl: string, token: string): Promise<ClassroomSyncResult> {
   const cleanUrl = webAppUrl.trim();
   if (!cleanUrl.startsWith('https://script.google.com/')) {
     throw new Error('Informe uma URL válida do Google Apps Script começando com https://script.google.com/macros/s/...');
   }
+  if (!token.trim()) {
+    throw new Error('Gere o token secreto, copie o script atualizado para o Apps Script e publique uma nova versão antes de sincronizar.');
+  }
 
-  const res = await fetch(cleanUrl, { method: 'GET', redirect: 'follow' });
+  // text/plain keeps this a "simple" request (no CORS preflight, which Apps Script does not answer).
+  const res = await fetch(cleanUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ token: token.trim() }),
+  });
   if (!res.ok) {
     throw new Error(`Erro HTTP ${res.status} ao consultar o Conector Apps Script. Verifique se a implantação está ativa para "Qualquer pessoa".`);
   }
 
-  const json = await res.json().catch(() => null);
+  let json: any = await res.json().catch(() => null);
+  let scriptProtected = json?.protected === true;
+
+  if (json?.error === 'unauthorized') {
+    throw new Error(
+      'O script recusou o token. Copie o script de novo (ele já leva o token atual), cole no Apps Script e publique em Implantar → Gerenciar implantações → Editar → Nova versão.'
+    );
+  }
+
+  // Old script without doPost: Apps Script answers the POST with an HTML error page. Fall back to the
+  // legacy GET so the import still works, but flag the script as open.
+  if (!json) {
+    const legacy = await fetch(cleanUrl, { method: 'GET', redirect: 'follow' }).catch(() => null);
+    json = legacy && legacy.ok ? await legacy.json().catch(() => null) : null;
+    scriptProtected = false;
+  }
+
   const bundles: RawCourseBundle[] = Array.isArray(json?.courses) ? json.courses : Array.isArray(json) ? json : [];
   if (bundles.length === 0) {
     throw new Error('O Conector Apps Script respondeu sem turmas. Confira se a conta logada no Apps Script possui turmas ativas no Google Classroom.');
   }
 
-  return buildSyncResultFromCourseBundles(bundles, 'apps_script');
+  return { ...buildSyncResultFromCourseBundles(bundles, 'apps_script'), scriptProtected };
 }
 
 /**
