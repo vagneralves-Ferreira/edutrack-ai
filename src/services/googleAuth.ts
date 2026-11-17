@@ -25,6 +25,66 @@ const SCOPE_LABELS: Record<ClassroomScopeKey, string> = {
   rosters: 'ver nomes dos professores',
 };
 
+const SCOPE_PREFIX = 'https://www.googleapis.com/auth/';
+
+/**
+ * Names Google may report for the same Classroom permission. Google renamed the student-submissions scopes to
+ * coursework.* but still returns (and shows in the Cloud console) the old names for some accounts/clients.
+ * The read-write variant of a scope also covers the read-only one.
+ */
+const SCOPE_EQUIVALENTS: Record<ClassroomScopeKey, string[]> = {
+  courses: ['classroom.courses.readonly', 'classroom.courses'],
+  courseworkMe: [
+    'classroom.coursework.me.readonly',
+    'classroom.student-submissions.me.readonly',
+    'classroom.coursework.me',
+  ],
+  materials: ['classroom.courseworkmaterials.readonly', 'classroom.courseworkmaterials'],
+  announcements: ['classroom.announcements.readonly', 'classroom.announcements'],
+  rosters: ['classroom.rosters.readonly', 'classroom.rosters'],
+};
+
+/** Other known old ↔ new aliases (not requested by the app, kept so the mapping is complete). */
+const SCOPE_ALIASES: Record<string, string> = {
+  'classroom.student-submissions.me.readonly': 'classroom.coursework.me.readonly',
+  'classroom.student-submissions.students.readonly': 'classroom.coursework.students.readonly',
+};
+
+/** "https://www.googleapis.com/auth/classroom.x" → "classroom.x" (old names mapped to the current ones). */
+export function normalizeScopeName(scope: string): string {
+  const short = scope.trim().replace(SCOPE_PREFIX, '');
+  return SCOPE_ALIASES[short] || short;
+}
+
+export function parseGrantedScopes(scopeString: string): string[] {
+  return scopeString.split(/[\s,]+/).filter(Boolean);
+}
+
+/** Which of our permissions the returned scope list covers, accepting old names and broader scopes. */
+export function grantsFromScopeList(scopes: string[]): Record<ClassroomScopeKey, boolean> {
+  const normalized = new Set(scopes.map(normalizeScopeName));
+  return Object.fromEntries(
+    (Object.keys(SCOPE_EQUIVALENTS) as ClassroomScopeKey[]).map((k) => [
+      k,
+      SCOPE_EQUIVALENTS[k].some((name) => normalized.has(normalizeScopeName(name))),
+    ])
+  ) as Record<ClassroomScopeKey, boolean>;
+}
+
+/** Error that carries the scope list Google returned (no token), shown in the modal for diagnosis. */
+export class GoogleScopeError extends Error {
+  grantedScopes: string[];
+  constructor(message: string, grantedScopes: string[]) {
+    super(message);
+    this.name = 'GoogleScopeError';
+    this.grantedScopes = grantedScopes;
+  }
+}
+
+function missingRequiredMessage(missing: ClassroomScopeKey[]): string {
+  return `Para importar, marque na tela do Google as permissões: ${missing.map((k) => SCOPE_LABELS[k]).join(' e ')}.`;
+}
+
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 let gisPromise: Promise<void> | null = null;
 
@@ -159,27 +219,9 @@ export function requestClassroomAccess(
           reject(new Error('O Google não devolveu um token de acesso. Tente de novo.'));
           return;
         }
-        const granted = Object.fromEntries(
-          (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[]).map((k) => [
-            k,
-            Boolean(api.hasGrantedAllScopes(resp, CLASSROOM_SCOPES[k])),
-          ])
-        ) as Record<ClassroomScopeKey, boolean>;
-
-        const missingRequired = REQUIRED_SCOPES.filter((k) => !granted[k]);
-        if (missingRequired.length > 0) {
-          revokeAccessToken(token);
-          reject(
-            new Error(
-              `Para importar, marque na tela do Google as permissões: ${missingRequired.map((k) => SCOPE_LABELS[k]).join(' e ')}.`
-            )
-          );
-          return;
-        }
-        const missingOptional = (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[])
-          .filter((k) => !REQUIRED_SCOPES.includes(k) && !granted[k])
-          .map((k) => SCOPE_LABELS[k]);
-        resolve({ accessToken: token, granted, missingOptional });
+        const outcome = accessFromGrantedScopes(token, String(resp?.scope || ''));
+        if (outcome.ok) resolve(outcome.access);
+        else reject(new GoogleScopeError(outcome.error, outcome.grantedScopes || []));
       },
       error_callback: (err: any) => {
         const type = String(err?.type || '');
@@ -289,21 +331,19 @@ export function hasClassroomRedirectResult(): boolean {
   }
 }
 
-export type ClassroomRedirectOutcome = { ok: true; access: ClassroomAccess } | { ok: false; error: string };
+export type ClassroomRedirectOutcome =
+  | { ok: true; access: ClassroomAccess }
+  /** grantedScopes: what Google returned in `scope` (never the token), shown in the modal for diagnosis. */
+  | { ok: false; error: string; grantedScopes?: string[] };
 
 /** Turns the `scope` string Google returns into per-scope grants (required ones are checked). */
 export function accessFromGrantedScopes(accessToken: string, scopeString: string): ClassroomRedirectOutcome {
-  const grantedList = scopeString.split(/[\s,]+/).filter(Boolean);
-  const granted = Object.fromEntries(
-    (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[]).map((k) => [k, grantedList.includes(CLASSROOM_SCOPES[k])])
-  ) as Record<ClassroomScopeKey, boolean>;
+  const grantedList = parseGrantedScopes(scopeString);
+  const granted = grantsFromScopeList(grantedList);
   const missingRequired = REQUIRED_SCOPES.filter((k) => !granted[k]);
   if (missingRequired.length > 0) {
     revokeAccessToken(accessToken);
-    return {
-      ok: false,
-      error: `Para importar, marque na tela do Google as permissões: ${missingRequired.map((k) => SCOPE_LABELS[k]).join(' e ')}.`,
-    };
+    return { ok: false, error: missingRequiredMessage(missingRequired), grantedScopes: grantedList };
   }
   const missingOptional = (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[])
     .filter((k) => !REQUIRED_SCOPES.includes(k) && !granted[k])

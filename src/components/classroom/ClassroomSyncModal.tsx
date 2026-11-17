@@ -31,6 +31,7 @@ import {
 import { findMatchingSubject } from '../../services/classroomImport';
 import {
   consumeClassroomRedirectResult,
+  GoogleScopeError,
   getGoogleClientId,
   hasClassroomRedirectResult,
   isGoogleIdentityLoaded,
@@ -110,6 +111,12 @@ export const ClassroomSyncModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Scopes Google returned (never the token), shown only together with the error they explain.
+  const [errorScopes, setErrorScopes] = useState<{ forError: string; scopes: string[] } | null>(null);
+  const showScopeError = (message: string, scopes: string[] | undefined) => {
+    setErrorMsg(message);
+    setErrorScopes(scopes ? { forError: message, scopes } : null);
+  };
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,7 +144,7 @@ export const ClassroomSyncModal: React.FC = () => {
     setActiveMode('google_api');
     setIsClassroomModalOpen(true);
     if (!outcome.ok) {
-      setErrorMsg(outcome.error);
+      showScopeError(outcome.error, outcome.grantedScopes);
       return;
     }
     void runGoogleImportRef.current?.(outcome.access);
@@ -386,7 +393,10 @@ export const ClassroomSyncModal: React.FC = () => {
       } catch (err: any) {
         setIsLoading(false);
         if (!controller.signal.aborted) {
-          setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
+          showScopeError(
+            err?.message || 'Não foi possível importar do Google Classroom.',
+            err instanceof GoogleScopeError ? err.grantedScopes : undefined
+          );
         }
       } finally {
         setAwaitingGoogle(false);
@@ -846,7 +856,25 @@ export const ClassroomSyncModal: React.FC = () => {
           {errorMsg && (
             <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-start gap-2.5 text-xs text-rose-300">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-              <span>{errorMsg}</span>
+              <div className="min-w-0">
+                <span>{errorMsg}</span>
+                {errorScopes && errorScopes.forError === errorMsg && (
+                  <div className="mt-2" data-testid="classroom-error-scopes">
+                    <p className="font-semibold">
+                      Permissões que o Google devolveu ({errorScopes.scopes.length}):
+                    </p>
+                    {errorScopes.scopes.length === 0 ? (
+                      <p className="opacity-80">(nenhuma)</p>
+                    ) : (
+                      <ul className="mt-1 space-y-0.5 font-mono text-[11px] break-all">
+                        {errorScopes.scopes.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
