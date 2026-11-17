@@ -158,7 +158,7 @@ export const UpcomingTasksSection: React.FC = () => {
                             )}
                           </div>
 
-                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                          <h4 className="cockpit-highlight-title text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
                             {task.title}
                           </h4>
                           <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
@@ -239,7 +239,7 @@ export const UpcomingTasksSection: React.FC = () => {
                         {formatDateBR(task.dueDate)}
                       </span>
                       <span className={`text-[10px] ${isUrgent && !isCompleted ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
-                        {label}
+                        {isCompleted ? 'Concluída' : label}
                       </span>
                     </div>
                   </div>

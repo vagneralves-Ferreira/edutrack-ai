@@ -47,7 +47,7 @@ export const LoginView: React.FC = () => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail || !password) {
-      setErrorMessage('Por favor, preencha o e-mail institucional e a senha.');
+      setErrorMessage('Por favor, preencha o e-mail e a senha.');
       return;
     }
 
@@ -77,7 +77,7 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
 
     if (!trimmedEmail || !password) {
-      setErrorMessage('Por favor, preencha o e-mail institucional e a senha para cadastrar.');
+      setErrorMessage('Por favor, preencha o e-mail e a senha para cadastrar.');
       return;
     }
 
@@ -103,12 +103,12 @@ export const LoginView: React.FC = () => {
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      setErrorMessage('Por favor, preencha o e-mail institucional para receber o link de recuperação de senha.');
+      setErrorMessage('Digite seu e-mail no campo acima para receber o link de recuperação de senha.');
       return;
     }
 
     if (!EMAIL_REGEX.test(cleanEmail)) {
-      setErrorMessage('Por favor, informe um endereço de e-mail institucional válido.');
+      setErrorMessage('Digite um e-mail válido no campo acima para receber o link de recuperação de senha.');
       return;
     }
 
@@ -149,46 +149,17 @@ export const LoginView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-4 sm:p-6 relative">
-      {/* Floating Theme Toggle on Desktop Login Screen */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="hidden sm:flex !fixed top-5 right-5 z-50 items-center gap-2 px-3.5 py-2 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
-      >
-        {themeToggleContent}
-      </button>
-
-      <div className="w-full max-w-4xl screen-stack-stage pt-6">
-        <div
-          onClick={() => navigate('/reset-password')}
-          title="Abrir tela Alterar Minha Senha"
-          className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-75 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
-            Alterar Minha Senha
-          </span>
-          <span className="text-[10px] text-slate-400">Recuperação de Acesso</span>
-        </div>
-        <div
-          onClick={() => navigate('/cadastro')}
-          title="Abrir tela de Cadastro"
-          className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-90 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
-            Criar Perfil Acadêmico • Cadastro
-          </span>
-          <span className="text-[10px] text-slate-300">Clique para puxar para frente →</span>
-        </div>
-
-        <div className="relative z-10 screen-emerge-behind w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
+      <div className="w-full max-w-4xl">
+        <div className="relative z-10 w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
-        <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
+        {/* login-brand-panel: opaque purple gradient in light mode (see index.css) so white text keeps WCAG AA contrast. */}
+        <div className="login-brand-panel hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
           <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -right-20 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
 
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/[0.12] mb-6">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
+            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 mb-6">
+              <Sparkles className="w-4 h-4 text-cyan-200" />
               <span className="text-xs font-extrabold tracking-wide text-white">EDUTRACK AI 2.0</span>
             </div>
 
@@ -198,18 +169,20 @@ export const LoginView: React.FC = () => {
                 Inteligente
               </span>
             </h2>
-            <p className="text-xs text-slate-300/85 mt-3 leading-relaxed">
+            {/* Classes here (text-white/90, bg-white/10, border-white/20, *-200 icons) are deliberately ones the
+                html.light overrides do not remap: this panel stays dark in both themes. */}
+            <p className="text-sm text-white/90 mt-3 leading-relaxed">
               Planejamento em Bento Grid integrado ao Supabase e Gemini AI para organizar disciplinas, entregas e estudos de qualquer faculdade.
             </p>
           </div>
 
-          <div className="relative z-10 space-y-2.5 text-xs text-slate-300">
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="relative z-10 space-y-2.5 text-xs text-white/90">
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
+              <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
               <span>Sincronização em nuvem via Supabase</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-              <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
+              <CheckCircle2 className="w-4 h-4 text-cyan-200 shrink-0" />
               <span>Dicas de estudo com Gemini AI em tempo real</span>
             </div>
           </div>
@@ -217,18 +190,20 @@ export const LoginView: React.FC = () => {
 
         {/* Right Login Form */}
         <div className="lg:col-span-6 p-6 sm:p-10 flex flex-col justify-center">
-          <div className="mb-6 flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
-              <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
-            </div>
+          <div className="mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
+            {/* Theme toggle lives inside the login card on every screen size. */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="sm:hidden shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
+              aria-label={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
             >
               {themeToggleContent}
             </button>
+          </div>
+          <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -306,10 +281,14 @@ export const LoginView: React.FC = () => {
             </button>
           </form>
 
-          <p className="text-center text-xs text-slate-400 mt-6">
+          <p className="mt-5 text-center text-sm text-slate-400">
             Não tem conta?{' '}
-            <Link to="/cadastro" onClick={handleRegister} className="text-cyan-400 hover:text-violet-300 font-bold">
-              Cadastre-se gratuitamente
+            <Link
+              to="/cadastro"
+              onClick={handleRegister}
+              className="font-bold text-violet-300 hover:underline underline-offset-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            >
+              Criar conta
             </Link>
           </p>
         </div>

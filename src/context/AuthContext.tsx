@@ -31,47 +31,91 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('edutrack_active_user');
-      return saved ? (JSON.parse(saved) as User) : null;
-    } catch {
-      return null;
+/** One-time cleanup of legacy offline-auth and plaintext-password localStorage keys. */
+function cleanupLegacyAuthStorage(): void {
+  if (localStorage.getItem('edutrack_auth_cleanup_v1') === 'done') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (
+        k === 'edutrack_active_user' ||
+        k.startsWith('edutrack_pwd_') ||
+        k.startsWith('edutrack_supabase_pwd_') ||
+        k.startsWith('edutrack_user_meta_') ||
+        k.includes('user-lucas.mendes')
+      ) {
+        keysToRemove.push(k);
+      }
     }
-  });
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    localStorage.setItem('edutrack_auth_cleanup_v1', 'done');
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileName, setProfileName] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    cleanupLegacyAuthStorage();
 
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    const initSession = async () => {
+      try {
+        const {
+          data: { session: currentSession },
+        } = await supabase.auth.getSession();
+
         if (!active) return;
-        if (session?.user) {
-          setSession(session);
-          setUser(session.user);
-        }
-      })
-      .catch((err) => {
-        console.error('Erro ao recuperar sessão:', err);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
-      if (session?.user) {
-        setSession(session);
-        setUser(session.user);
-      } else {
-        const saved = localStorage.getItem('edutrack_active_user');
-        if (!saved) {
+        if (!currentSession) {
+          setSession(null);
+          setUser(null);
+          return;
+        }
+
+        // Verify the user still exists on the Supabase Auth server (handles deleted accounts)
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (!active) return;
+
+        if (userError || !userData?.user) {
+          await supabase.auth.signOut().catch(() => {});
+          setSession(null);
+          setUser(null);
+          return;
+        }
+
+        setSession(currentSession);
+        setUser(userData.user);
+      } catch (err) {
+        console.error('Erro ao recuperar sessão:', err);
+        if (active) {
           setSession(null);
           setUser(null);
         }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void initSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
+      if (!active) return;
+      if (nextSession?.user) {
+        setSession(nextSession);
+        setUser(nextSession.user);
+      } else {
+        setSession(null);
+        setUser(null);
       }
       setLoading(false);
     });
@@ -109,7 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    loadProfileName();
+    void loadProfileName();
 
     return () => {
       active = false;
@@ -121,60 +165,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
 
-    // Verifica primeiro se o usuário redefiniu a senha pelo fluxo de recuperação
-    const savedResetPassword = localStorage.getItem(`edutrack_pwd_${cleanEmail}`);
-    if (savedResetPassword) {
-      if (savedResetPassword !== password) {
-        return { success: false, error: 'E-mail ou senha inválidos. Verifique os dados informados.' };
-      }
-
-      // Tenta autenticar também no Supabase caso a senha já tenha sido sincronizada lá
-      const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-      if (!supaError && supaData?.user) {
-        localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
-        localStorage.setItem('edutrack_active_user', JSON.stringify(supaData.user));
-        setUser(supaData.user);
-        if (supaData.session) setSession(supaData.session);
-        return { success: true };
-      }
-
-      const recoveredUser = {
-        id: `user-${cleanEmail}`,
-        aud: 'authenticated',
-        role: 'authenticated',
-        email: cleanEmail,
-        app_metadata: {},
-        user_metadata: { name: cleanEmail.split('@')[0] },
-        created_at: new Date().toISOString(),
-      } as User;
-
-      localStorage.setItem('edutrack_active_user', JSON.stringify(recoveredUser));
-      setUser(recoveredUser);
-      return { success: true };
+    if (error || !data?.user) {
+      return {
+        success: false,
+        error: 'E-mail ou senha inválidos. Verifique os dados informados.',
+      };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-    if (!error && data?.user) {
-      localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
-      localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
-      localStorage.setItem('edutrack_active_user', JSON.stringify(data.user));
-      setUser(data.user);
-      if (data.session) setSession(data.session);
-      return { success: true };
-    }
-
-    if (error) return { success: false, error: 'E-mail ou senha inválidos. Verifique os dados informados.' };
+    setUser(data.user);
+    if (data.session) setSession(data.session);
     return { success: true };
   };
 
   const signOut = async () => {
-    localStorage.removeItem('edutrack_active_user');
     setUser(null);
     setSession(null);
+    setProfileName(null);
     await supabase.auth.signOut().catch(() => {});
   };
 
@@ -186,38 +197,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       options: metadata ? { data: metadata } : undefined,
     });
     if (error) return { success: false, error: error.message };
-    localStorage.setItem(`edutrack_pwd_${cleanEmail}`, password);
-    localStorage.setItem(`edutrack_supabase_pwd_${cleanEmail}`, password);
-    if (metadata) {
-      localStorage.setItem(`edutrack_user_meta_${cleanEmail}`, JSON.stringify(metadata));
-    }
     return { success: true, data };
   };
 
   const emailPrefix = user?.email ? user.email.split('@')[0] : 'Usuário';
   const cleanUserEmail = user?.email?.toLowerCase() || '';
-  let storedMeta: RegisterMetadata = {};
-  if (cleanUserEmail) {
-    try {
-      const rawMeta = localStorage.getItem(`edutrack_user_meta_${cleanUserEmail}`);
-      if (rawMeta) storedMeta = JSON.parse(rawMeta);
-    } catch {
-      storedMeta = {};
-    }
-  }
   const supaMeta = (user?.user_metadata || {}) as RegisterMetadata;
   const resolvedInstitution =
     supaMeta.institution ||
-    storedMeta.institution ||
     (cleanUserEmail.includes('impacta.edu') ? 'Faculdade Impacta' : 'Minha Faculdade');
 
-  const appUser = user ? {
-    ...user,
-    name: profileName || supaMeta.name || storedMeta.name || emailPrefix,
-    institution: resolvedInstitution,
-    course: supaMeta.course || storedMeta.course || 'Graduação',
-    semester: supaMeta.semester || storedMeta.semester || '2026.2',
-  } as AppUser : null;
+  const appUser = user
+    ? ({
+        ...user,
+        name: profileName || supaMeta.name || emailPrefix,
+        institution: resolvedInstitution,
+        course: supaMeta.course || 'Graduação',
+        semester: supaMeta.semester || '2026.2',
+      } as AppUser)
+    : null;
 
   const value = {
     user,

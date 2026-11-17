@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Check, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import type { Priority, TaskType } from '../../types';
+import { isInnovationLabSubject } from '../../utils/helpers';
 
 export const NewTaskModal: React.FC = () => {
   const { isNewTaskModalOpen, setIsNewTaskModalOpen, subjects, addTask } = usePlanner();
 
   const [title, setTitle] = useState('');
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id || 'sql-fundamentals');
+  const [subjectId, setSubjectId] = useState(subjects?.[0]?.id ?? 'sql-fundamentals');
   const [dueDate, setDueDate] = useState('2026-11-15');
   const [dueTime, setDueTime] = useState('23:59');
   const [priority, setPriority] = useState<Priority>('alta');
@@ -15,16 +16,27 @@ export const NewTaskModal: React.FC = () => {
   const [isCriticalMvp, setIsCriticalMvp] = useState(false);
   const [scoreWeight, setScoreWeight] = useState('Peso 40%');
   const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Ensure selected subjectId always matches a valid subject from the dynamic dropdown list
   useEffect(() => {
-    if (isNewTaskModalOpen && subjects.length > 0) {
-      const exists = subjects.some((s) => s.id === subjectId);
+    if (isNewTaskModalOpen && (subjects?.length ?? 0) > 0) {
+      const exists = subjects.some((s) => s?.id === subjectId);
       if (!exists) {
-        setSubjectId(subjects[0].id);
+        setSubjectId(subjects[0]?.id ?? 'sql-fundamentals');
       }
     }
   }, [isNewTaskModalOpen, subjects, subjectId]);
+
+  const selectedSubject = (subjects ?? []).find((s) => s?.id === subjectId);
+  const isMvpAllowed = isInnovationLabSubject(selectedSubject);
+
+  // MVP is exclusive to Innovation Lab: switching to another subject clears it.
+  useEffect(() => {
+    if (isMvpAllowed) return;
+    setIsCriticalMvp(false);
+    setType((prev) => (prev === 'avaliacao_mvp' ? 'avaliacao' : prev));
+  }, [isMvpAllowed]);
 
   if (!isNewTaskModalOpen) return null;
 
@@ -51,25 +63,29 @@ export const NewTaskModal: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (isSubmitting || !title.trim()) return;
+    setIsSubmitting(true);
 
-    const selectedSubject = subjects.find((s) => s.id === subjectId) || subjects[0];
+    const safeSubjects = subjects ?? [];
+    const targetSubject = selectedSubject ?? safeSubjects[0];
+    const saveAsMvp = isCriticalMvp && isInnovationLabSubject(targetSubject);
 
     addTask({
       title: title.trim(),
-      subjectId: selectedSubject ? selectedSubject.id : subjectId,
-      subjectName: selectedSubject ? selectedSubject.name : 'SQL Fundamentals',
+      subjectId: targetSubject?.id ?? subjectId ?? 'sql-fundamentals',
+      subjectName: targetSubject?.name ?? 'Disciplina Padrão',
       dueDate: dueDate || '2026-11-15',
       dueTime,
       priority,
       status: 'todo',
-      type,
-      isCriticalMvp,
-      scoreWeight: isCriticalMvp ? scoreWeight : undefined,
+      type: !saveAsMvp && type === 'avaliacao_mvp' ? 'avaliacao' : type,
+      isCriticalMvp: saveAsMvp,
+      scoreWeight: saveAsMvp ? scoreWeight : undefined,
       description: description.trim() || 'Sem descrição adicional.',
       importedFromClassroom: false,
     });
 
+    setIsSubmitting(false);
     handleClose();
   };
 
@@ -133,11 +149,17 @@ export const NewTaskModal: React.FC = () => {
                 onChange={(e) => setSubjectId(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#0e1320] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer transition-all"
               >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-[#0e1320] text-white">
-                    {s.name}
+                {(subjects?.length ?? 0) > 0 ? (
+                  subjects.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#0e1320] text-white">
+                      {s.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="sql-fundamentals" className="bg-[#0e1320] text-white">
+                    Disciplina Padrão
                   </option>
-                ))}
+                )}
               </select>
             </div>
 
@@ -165,7 +187,9 @@ export const NewTaskModal: React.FC = () => {
                 <option value="leitura">Leitura Complementar</option>
                 <option value="projeto">Projeto Integrador</option>
                 <option value="avaliacao">Avaliação Parcial</option>
-                <option value="avaliacao_mvp">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
+                {isMvpAllowed && (
+                  <option value="avaliacao_mvp">⭐ Avaliação Parcial MVP (Innovation Lab)</option>
+                )}
               </select>
             </div>
           </div>
@@ -201,8 +225,9 @@ export const NewTaskModal: React.FC = () => {
             </div>
           </div>
 
-          {/* MVP Checkbox */}
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          {/* MVP Checkbox (Innovation Lab only) */}
+          {isMvpAllowed && (
+          <div data-testid="mvp-checkbox-block" className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -236,6 +261,7 @@ export const NewTaskModal: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -261,7 +287,8 @@ export const NewTaskModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>Salvar Atividade</span>

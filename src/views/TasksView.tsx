@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { usePlanner } from '../context/PlannerContext';
 import type { TaskStatus } from '../types';
 import { 
@@ -13,13 +14,15 @@ import {
   List, 
   Trash2,
   RefreshCw,
-  BookMarked
+  BookMarked,
+  GraduationCap
 } from 'lucide-react';
 import { formatDateBR, getDaysRemaining, getTaskTypeBadge, getPriorityBadge } from '../utils/helpers';
 import { AiDica } from '../components/AiDica';
+import { EmptyPlannerState } from '../components/EmptyPlannerState';
 
 export const TasksView: React.FC = () => {
-  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
+  const { tasks, subjects, updateTaskStatus, deleteTask, setIsNewTaskModalOpen, setIsClassroomModalOpen, loadError } = usePlanner();
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -27,6 +30,44 @@ export const TasksView: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [onlyMvp, setOnlyMvp] = useState<boolean>(false);
+
+  // Deep link from the notifications bell: /tarefas?task=<id>
+  const [searchParams] = useSearchParams();
+  const focusTaskId = searchParams.get('task');
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const handledFocusRef = useRef<string | null>(null);
+  const taskExists = !!focusTaskId && tasks.some((t) => t.id === focusTaskId);
+
+  useEffect(() => {
+    // Run once per deep-linked id, as soon as the task is loaded.
+    if (!focusTaskId || !taskExists || handledFocusRef.current === focusTaskId) return;
+    handledFocusRef.current = focusTaskId;
+
+    // Make sure the target task is not hidden by filters.
+    setSelectedSubjectId('all');
+    setSelectedPriority('all');
+    setSelectedType('all');
+    setSearchQuery('');
+    setOnlyMvp(false);
+    setHighlightedTaskId(focusTaskId);
+  }, [focusTaskId, taskExists]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const scrollTimer = setTimeout(() => {
+      document
+        .querySelector(`[data-task-id="${CSS.escape(highlightedTaskId)}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clearTimer = setTimeout(() => setHighlightedTaskId(null), 2500);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightedTaskId]);
+
+  const highlightClass = (id: string) =>
+    highlightedTaskId === id ? ' ring-2 ring-cyan-400 ring-offset-2 ring-offset-transparent' : '';
 
   // Google Classroom Sync Modal Trigger
   const [isSyncingClassroom] = useState(false);
@@ -228,8 +269,19 @@ export const TasksView: React.FC = () => {
         </button>
       </div>
 
-      {/* Content: Kanban or List */}
-      {viewMode === 'kanban' ? (
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+          {loadError}
+        </div>
+      )}
+
+      {/* Content: Empty State, Kanban or List */}
+      {tasks.length === 0 ? (
+        <EmptyPlannerState
+          title="Nenhuma tarefa cadastrada"
+          description="Você ainda não tem tarefas no Supabase. Adicione uma disciplina, sincronize com o Google Classroom ou carregue os dados de exemplo."
+        />
+      ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {columns.map((column) => {
             const colTasks = filteredTasks.filter(t => t.status === column.id);
@@ -264,15 +316,20 @@ export const TasksView: React.FC = () => {
                       const matchedSubject = subjects.find((s) => s.id === task.subjectId);
                       const subjectColor = matchedSubject?.color || '#38bdf8';
                       const subjectDisplayName = matchedSubject?.name || task.subjectName;
+                      const professorLabel =
+                        matchedSubject?.professors && matchedSubject.professors.length > 0
+                          ? matchedSubject.professors.join(', ')
+                          : null;
 
                       return (
                         <div
                           key={task.id}
+                          data-task-id={task.id}
                           className={`rounded-xl p-4 border transition-all group ${
                             task.isCriticalMvp && task.status !== 'completed'
-                              ? 'bg-gradient-to-b from-amber-500/12 to-white/[0.02] border-amber-500/30 hover:border-amber-500/50'
+                              ? 'kanban-mvp-card bg-gradient-to-b from-amber-500/12 to-white/[0.02] border-amber-500/30 hover:border-amber-500/50'
                               : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05] hover:border-white/[0.14]'
-                          }`}
+                          }${highlightClass(task.id)}`}
                         >
                           {/* Subject, Category & Priority badges */}
                           <div className="flex items-start justify-between gap-1.5 mb-2.5 flex-wrap">
@@ -321,6 +378,13 @@ export const TasksView: React.FC = () => {
                             {task.description}
                           </p>
 
+                          {professorLabel && (
+                            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-300 font-medium">
+                              <GraduationCap className="w-3 h-3 text-violet-400 shrink-0" />
+                              <span className="truncate">{professorLabel}</span>
+                            </div>
+                          )}
+
                           {/* Due Date & Urgency */}
                           <div className="mt-3 pt-2.5 border-t border-white/[0.05] flex items-center justify-between text-[10px]">
                             <div className="flex items-center gap-1 text-slate-300 font-mono">
@@ -329,7 +393,7 @@ export const TasksView: React.FC = () => {
                             </div>
 
                             <span className={`font-semibold ${isUrgent && task.status !== 'completed' ? 'text-amber-400' : 'text-slate-400'}`}>
-                              {label}
+                              {task.status === 'completed' ? 'Concluída' : label}
                             </span>
                           </div>
 
@@ -400,13 +464,14 @@ export const TasksView: React.FC = () => {
               return (
                 <div
                   key={task.id}
+                  data-task-id={task.id}
                   className={`rounded-xl p-4 sm:p-5 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                     task.isCriticalMvp && !isCompleted
                       ? 'bg-gradient-to-r from-amber-500/12 to-white/[0.02] border-amber-500/30'
                       : isCompleted
                       ? 'bg-white/[0.01] border-white/[0.04] opacity-60'
                       : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]'
-                  }`}
+                  }${highlightClass(task.id)}`}
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <button
@@ -467,7 +532,7 @@ export const TasksView: React.FC = () => {
                         {formatDateBR(task.dueDate)} {task.dueTime ? `(${task.dueTime})` : ''}
                       </span>
                       <span className={`text-[10px] font-semibold ${isUrgent && !isCompleted ? 'text-amber-400' : 'text-slate-400'}`}>
-                        {label}
+                        {isCompleted ? 'Concluída' : label}
                       </span>
                     </div>
 

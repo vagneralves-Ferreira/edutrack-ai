@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
-import { getGreeting } from '../../utils/helpers';
+import { getGreeting, formatDateBR } from '../../utils/helpers';
 import { openAcademicReportPdf } from '../../utils/reportGenerator';
 
 export const GreetingBanner: React.FC = () => {
@@ -14,7 +14,9 @@ export const GreetingBanner: React.FC = () => {
     ? Math.round(subjects.reduce((sum, s) => sum + s.progress, 0) / subjects.length)
     : 0;
 
-  const pendingClassroom = tasks.filter((t) => t.status !== 'completed');
+  const pendingClassroom = [...tasks]
+    .filter((t) => t.status !== 'completed')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
@@ -35,7 +37,7 @@ export const GreetingBanner: React.FC = () => {
 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
             {greeting}{' '}
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
+            <span className="cockpit-hero-gradient block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
               Cockpit Acadêmico
             </span>
           </h1>
@@ -85,18 +87,24 @@ export const GreetingBanner: React.FC = () => {
 
       {/* Bottom Bar inside Hero Card */}
       <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
-        <div
-          onClick={() => setIsClassroomModalOpen(true)}
-          className="flex items-center gap-2 text-[11px] text-rose-200 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 rounded-xl px-3 py-1.5 cursor-pointer transition-colors"
-          title="Ver sincronização Google Classroom"
-        >
-          <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-          <span>
-            Classroom ({pendingClassroom.length} pendentes):{' '}
-            <strong className="text-white">Procedure (07/11)</strong> • Tarefas (19/11) •{' '}
-            <strong className="text-white">Entrega MVP (23/11)</strong>
-          </span>
-        </div>
+        {pendingClassroom.length > 0 && (
+          <div
+            onClick={() => setIsClassroomModalOpen(true)}
+            className="flex items-center gap-2 text-[11px] text-rose-200 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 rounded-xl px-3 py-1.5 cursor-pointer transition-colors"
+            title="Ver sincronização Google Classroom"
+          >
+            <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span>
+              Pendências ({pendingClassroom.length}):{' '}
+              {pendingClassroom.slice(0, 3).map((t, idx) => (
+                <React.Fragment key={t.id}>
+                  {idx > 0 && ' • '}
+                  <strong className="text-white">{t.title}</strong> ({formatDateBR(t.dueDate)})
+                </React.Fragment>
+              ))}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <button

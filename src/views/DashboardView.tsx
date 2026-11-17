@@ -6,13 +6,19 @@ import { SubjectProgressCard } from '../components/dashboard/SubjectProgressCard
 import { TimeDistributionChart } from '../components/dashboard/TimeDistributionChart';
 import { UpcomingTasksSection } from '../components/dashboard/UpcomingTasksSection';
 import { AiDica } from '../components/AiDica';
+import { EmptyPlannerState } from '../components/EmptyPlannerState';
 import { BookOpen, ArrowRight } from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
-  const { subjects, tasks, setActiveTab } = usePlanner();
+  const { subjects, tasks, setActiveTab, loadError } = usePlanner();
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+          {loadError}
+        </div>
+      )}
       {/* BENTO ROW 1: 3-Column Asymmetric Cockpit Strip (Hero 5 cols + 2x2 Stats 4 cols + AI Copilot 3 cols) */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
         <div className="lg:col-span-5">
@@ -58,11 +64,18 @@ export const DashboardView: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-          {subjects.map((subject) => (
-            <SubjectProgressCard key={subject.id} subject={subject} />
-          ))}
-        </div>
+        {subjects.length === 0 ? (
+          <EmptyPlannerState
+            title="Nenhuma disciplina cadastrada"
+            description="Adicione sua primeira disciplina, sincronize com o Google Classroom ou carregue os dados de exemplo."
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {subjects.map((subject) => (
+              <SubjectProgressCard key={subject.id} subject={subject} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* BENTO ROW 3: Central de Entregas (8 cols) + Distribuição de Foco (4 cols) */}

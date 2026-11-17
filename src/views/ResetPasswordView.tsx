@@ -75,36 +75,22 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
     setLoading(true);
 
     try {
-      const previousKnownPassword =
-        localStorage.getItem(`edutrack_supabase_pwd_${targetEmail}`) ||
-        localStorage.getItem(`edutrack_pwd_${targetEmail}`);
-
-      // Persiste imediatamente a nova senha escolhida e invalida a antiga
-      localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
-      localStorage.setItem('edutrack_recovery_email', targetEmail);
-      localStorage.removeItem('edutrack_active_user');
-
-      // Tenta atualizar também no Supabase Auth (via sessão ativa ou autenticando silenciosamente com a senha anterior conhecida)
       const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session) {
-        const { error: updateErr } = await supabase.auth.updateUser({ password });
-        if (!updateErr) {
-          localStorage.setItem(`edutrack_supabase_pwd_${targetEmail}`, password);
-        }
-        await supabase.auth.signOut().catch(() => {});
-      } else if (previousKnownPassword && previousKnownPassword !== password) {
-        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-          email: targetEmail,
-          password: previousKnownPassword,
-        });
-        if (!signInErr && signInData?.session) {
-          const { error: updateErr } = await supabase.auth.updateUser({ password });
-          if (!updateErr) {
-            localStorage.setItem(`edutrack_supabase_pwd_${targetEmail}`, password);
-          }
-          await supabase.auth.signOut().catch(() => {});
-        }
+      if (!sessionData?.session) {
+        setErrorMessage('Link de recuperação expirado ou inválido. Solicite um novo link na tela de login.');
+        setLoading(false);
+        return;
       }
+
+      const { error: updateErr } = await supabase.auth.updateUser({ password });
+      if (updateErr) {
+        setErrorMessage(updateErr.message || 'Não foi possível atualizar a senha.');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('edutrack_recovery_email', targetEmail);
+      await supabase.auth.signOut().catch(() => {});
 
       setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
       setLoading(false);
@@ -113,15 +99,8 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
         exitToLogin();
       }, 900);
     } catch {
-      localStorage.setItem(`edutrack_pwd_${targetEmail}`, password);
-      localStorage.setItem('edutrack_recovery_email', targetEmail);
-      localStorage.removeItem('edutrack_active_user');
-      setSuccessMessage('Senha alterada com sucesso! Retornando para a tela de login...');
+      setErrorMessage('Erro ao redefinir a senha. Tente novamente.');
       setLoading(false);
-
-      setTimeout(() => {
-        exitToLogin();
-      }, 900);
     }
   };
 

@@ -1,4 +1,23 @@
-import type { TaskType, Priority } from '../types';
+import type { TaskType, Priority, Subject } from '../types';
+
+/**
+ * The MVP evaluation is exclusive to Innovation Lab (IMP-INN303).
+ * Matches by course code first, then by the seed id, then by a normalized name
+ * (Classroom/Supabase subjects may have UUID ids or slightly different names).
+ */
+export function isInnovationLabSubject(
+  subject?: Pick<Subject, 'id' | 'code' | 'name'> | null
+): boolean {
+  if (!subject) return false;
+  const code = (subject.code || '').toUpperCase().replace(/[\s_-]/g, '');
+  if (code.includes('INN303')) return true;
+  if (subject.id === 'innovation-lab') return true;
+  const name = (subject.name || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  return /\binnovation\s*lab\b/.test(name);
+}
 
 export function formatDateBR(dateStr: string): string {
   if (!dateStr) return '';
@@ -16,15 +35,15 @@ export function getDaysRemaining(dueDateStr: string): {
   isToday: boolean;
   isPast: boolean;
 } {
-  // Current simulated base date: 2026-09-05 (matching current context)
-  const now = new Date('2026-09-05T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const target = new Date(dueDateStr + 'T00:00:00');
   
   const diffTime = target.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
-    return { days: diffDays, label: 'Expirada', isUrgent: true, isToday: false, isPast: true };
+    return { days: diffDays, label: 'Atrasada', isUrgent: true, isToday: false, isPast: true };
   }
   if (diffDays === 0) {
     return { days: 0, label: 'Hoje!', isUrgent: true, isToday: true, isPast: false };

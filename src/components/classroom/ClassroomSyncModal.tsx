@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   BookMarked,
@@ -19,6 +19,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   fetchGoogleClassroomFullData,
   fetchGoogleAppsScriptClassroom,
@@ -36,6 +37,8 @@ const CLASSROOM_SCOPES = [
 ].join(' ');
 
 export const ClassroomSyncModal: React.FC = () => {
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id || null;
   const {
     isClassroomModalOpen,
     setIsClassroomModalOpen,
@@ -48,14 +51,14 @@ export const ClassroomSyncModal: React.FC = () => {
     'apps_script' | 'paste_import' | 'google_api' | 'full_impacta'
   >('apps_script');
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(
-    () => localStorage.getItem('edutrack_apps_script_url') || ''
+    () => (userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '')
   );
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
   const [accessToken, setAccessToken] = useState<string>(
-    () => localStorage.getItem('edutrack_google_classroom_token') || ''
+    () => (userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '')
   );
   const [googleClientId, setGoogleClientId] = useState<string>(
-    () => localStorage.getItem('edutrack_google_client_id') || ''
+    () => (userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '')
   );
   const [pastedText, setPastedText] = useState<string>('');
   const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
@@ -63,6 +66,14 @@ export const ClassroomSyncModal: React.FC = () => {
   const [stepStatus, setStepStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAppsScriptUrl(userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '');
+    setAccessToken(userId ? localStorage.getItem(`edutrack_google_classroom_token_${userId}`) || '' : '');
+    setGoogleClientId(userId ? localStorage.getItem(`edutrack_google_client_id_${userId}`) || '' : '');
+    setErrorMsg(null);
+    setSuccessMsg(null);
+  }, [userId]);
 
   if (!isClassroomModalOpen) return null;
 
@@ -113,7 +124,7 @@ export const ClassroomSyncModal: React.FC = () => {
     setStepStatus('Buscando todas as turmas, entregas e professores diretamente da sua conta Google Classroom...');
 
     try {
-      localStorage.setItem('edutrack_apps_script_url', cleanUrl);
+      if (userId) localStorage.setItem(`edutrack_apps_script_url_${userId}`, cleanUrl);
       const result = await fetchGoogleAppsScriptClassroom(cleanUrl);
       setStepStatus('Atualizando disciplinas, todas as entregas e Cockpit no EduTrack AI...');
       await applyClassroomSyncResult(result);
@@ -141,7 +152,7 @@ export const ClassroomSyncModal: React.FC = () => {
     setStepStatus('Consultando turmas ativas em classroom.googleapis.com/v1/courses...');
 
     try {
-      localStorage.setItem('edutrack_google_classroom_token', token);
+      if (userId) localStorage.setItem(`edutrack_google_classroom_token_${userId}`, token);
       const result = await fetchGoogleClassroomFullData(token);
       setStepStatus('Salvando disciplinas, materiais, notas e atividades no EduTrack AI...');
       await applyClassroomSyncResult(result);
@@ -172,7 +183,7 @@ export const ClassroomSyncModal: React.FC = () => {
       return;
     }
 
-    localStorage.setItem('edutrack_google_client_id', cleanClientId);
+    if (userId) localStorage.setItem(`edutrack_google_client_id_${userId}`, cleanClientId);
     setIsLoading(true);
     setStepStatus('Abrindo janela de autorização do Google Classroom...');
 
@@ -253,7 +264,7 @@ export const ClassroomSyncModal: React.FC = () => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bento-card w-full max-w-2xl rounded-3xl border border-violet-500/30 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-white/[0.08] flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-[#10111a] to-violet-950/40">
+        <div className="classroom-modal-header px-6 py-5 border-b border-white/[0.08] flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-[#10111a] to-violet-950/40">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
               <BookMarked className="w-5 h-5" />

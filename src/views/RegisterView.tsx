@@ -85,17 +85,6 @@ export const RegisterView: React.FC = () => {
     }
   };
 
-  const handlePreFillExample = () => {
-    setName('Lucas Mendes');
-    setInstitution('Cruzeiro do Sul');
-    setEmail('lucas.mendes@cruzeirodosul.edu.br');
-    setCourse('Engenharia de Software');
-    setSemester('3º Semestre');
-    setPassword('estudos2026');
-    setConfirmPassword('estudos2026');
-    setErrorMessage(null);
-  };
-
   return (
     <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none font-sans">
       {/* Background ambient lighting */}
@@ -141,24 +130,13 @@ export const RegisterView: React.FC = () => {
           </div>
           <div className="relative z-10 screen-emerge-behind rounded-3xl bento-card p-7 sm:p-9 shadow-2xl border-violet-500/25">
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-7">
-            <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">
-                Criar Perfil Acadêmico
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Preencha os dados abaixo para configurar sua grade do semestre 2026.2.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handlePreFillExample}
-              className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-lg transition-colors shrink-0 cursor-pointer shadow-sm"
-              title="Preenche campos de exemplo de estudante"
-            >
-              ⚡ Preencher Exemplo
-            </button>
+          <div className="mb-7">
+            <h2 className="text-lg font-bold text-white tracking-tight">
+              Criar Perfil Acadêmico
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Preencha os dados abaixo para configurar sua grade do semestre 2026.2.
+            </p>
           </div>
 
           {/* Error Alert */}

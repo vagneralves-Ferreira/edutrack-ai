@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
   Send, 
@@ -48,6 +48,21 @@ export const AiAssistantView: React.FC = () => {
       checklist: initialChecklist,
     },
   ]);
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0].id === 'msg-welcome') {
+        return [
+          {
+            ...prev[0],
+            text: `Olá! Sou o EduTrack AI, seu copiloto acadêmico (${institutionLabel}). Analisei suas ${subjects.length} disciplinas e ${tasks.length} atividades cadastradas (${pendingTasks.length} pendentes):`,
+            checklist: initialChecklist,
+          },
+        ];
+      }
+      return prev;
+    });
+  }, [subjects.length, tasks.length, pendingTasks.length, institutionLabel]);
 
   const buildDynamicReply = (question: string): { text: string; checklist: string[] } => {
     const lower = question.toLowerCase();

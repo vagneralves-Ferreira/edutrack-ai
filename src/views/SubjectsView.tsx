@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
 import { AiDica } from '../components/AiDica';
+import { EmptyPlannerState } from '../components/EmptyPlannerState';
 import { formatDateBR } from '../utils/helpers';
 import type { StudyMaterial } from '../types';
 
 export const SubjectsView: React.FC = () => {
-  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus } = usePlanner();
+  const { subjects, tasks, selectedSubject, setSelectedSubject, addSubject, setIsClassroomModalOpen, updateTaskStatus, loadError } = usePlanner();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterial | null>(null);
   const [newCode, setNewCode] = useState('');
@@ -18,9 +19,12 @@ export const SubjectsView: React.FC = () => {
     ? tasks.filter((t) => t.subjectId === activeSubject.id || t.subjectName.toLowerCase() === activeSubject.name.toLowerCase())
     : [];
 
+  const [isSubmittingSubject, setIsSubmittingSubject] = useState(false);
+
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newCode.trim()) return;
+    if (isSubmittingSubject || !newName.trim() || !newCode.trim()) return;
+    setIsSubmittingSubject(true);
 
     addSubject({
       code: newCode.trim(),
@@ -31,6 +35,7 @@ export const SubjectsView: React.FC = () => {
     setNewCode('');
     setNewName('');
     setNewProf('');
+    setIsSubmittingSubject(false);
     setIsModalOpen(false);
   };
 
@@ -83,6 +88,19 @@ export const SubjectsView: React.FC = () => {
         }}
       />
 
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+          {loadError}
+        </div>
+      )}
+
+      {subjects.length === 0 ? (
+        <EmptyPlannerState
+          title="Nenhuma disciplina cadastrada"
+          description="Sua grade está vazia. Adicione uma disciplina manualmente, sincronize com o Google Classroom ou carregue os dados de exemplo."
+          onAddSubject={() => setIsModalOpen(true)}
+        />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-3">
           <div className="flex justify-between items-center px-1">
@@ -123,7 +141,15 @@ export const SubjectsView: React.FC = () => {
                   <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">{activeSubject.code}</span>
                   <span className="text-xs text-slate-400">Faculdade Impacta Tecnologia</span>
                 </div>
-                <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                <span
+                  className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+                    activeSubject.progress >= 100
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      : activeSubject.progress > 0
+                      ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300'
+                      : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
+                  }`}
+                >
                   {activeSubject.progress}% Concluído
                 </span>
               </div>
@@ -313,6 +339,7 @@ export const SubjectsView: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
@@ -367,7 +394,8 @@ export const SubjectsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-md cursor-pointer"
+                  disabled={isSubmittingSubject}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer"
                 >
                   Salvar Disciplina
                 </button>
