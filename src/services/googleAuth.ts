@@ -211,8 +211,152 @@ export function requestClassroomAccess(
 /** Revokes the token at Google (best effort). Called right after the Classroom data has been read. */
 export function revokeAccessToken(token: string): void {
   try {
-    oauth2()?.revoke(token, () => {});
+    const api = oauth2();
+    if (api) {
+      api.revoke(token, () => {});
+      return;
+    }
+    // Redirect flow: GIS may not be loaded; use the revoke endpoint directly.
+    void fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${encodeURIComponent(token)}`,
+    }).catch(() => {});
   } catch {
     // ignore: the token expires on its own in about an hour
   }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Redirect flow (default). The popup flow above depends on the popup talking back to the opener, which Google's
+// Cross-Origin-Opener-Policy can break in some Chrome setups; a full-page redirect does not.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const OAUTH_CALLBACK_PATH = '/oauth-callback.html';
+const PENDING_KEY = 'edutrack_google_oauth_pending';
+const RESULT_KEY = 'edutrack_google_oauth_result';
+/** Not a secret: only remembers that this browser already went through the consent screen once. */
+const CONSENTED_KEY = 'edutrack_google_oauth_consented';
+const REDIRECT_MAX_AGE_MS = 10 * 60 * 1000;
+
+export function getOAuthRedirectUri(origin: string = window.location.origin): string {
+  return `${origin}${OAUTH_CALLBACK_PATH}`;
+}
+
+function randomState(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sends the whole page to Google's OAuth 2.0 endpoint (implicit flow, response_type=token).
+ * Google comes back to /oauth-callback.html, which returns to the current hash route.
+ */
+export function startClassroomRedirect(clientId: string): void {
+  if (!clientId) throw new Error('O app ainda não tem o Client ID do Google configurado (VITE_GOOGLE_CLIENT_ID).');
+  const state = randomState();
+  const returnTo = window.location.hash && window.location.hash.startsWith('#/') ? window.location.hash : '#/tarefas';
+  sessionStorage.setItem(PENDING_KEY, JSON.stringify({ state, returnTo, createdAt: Date.now() }));
+  sessionStorage.removeItem(RESULT_KEY);
+
+  let consentedBefore = false;
+  try {
+    consentedBefore = localStorage.getItem(CONSENTED_KEY) === '1';
+  } catch {
+    consentedBefore = false;
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: getOAuthRedirectUri(),
+    response_type: 'token',
+    scope: Object.values(CLASSROOM_SCOPES).join(' '),
+    state,
+    include_granted_scopes: 'true',
+    // First time: show the consent screen; afterwards just let the student pick the account.
+    prompt: consentedBefore ? 'select_account' : 'consent select_account',
+  });
+  window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+}
+
+export function hasClassroomRedirectResult(): boolean {
+  try {
+    return sessionStorage.getItem(RESULT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export type ClassroomRedirectOutcome = { ok: true; access: ClassroomAccess } | { ok: false; error: string };
+
+/** Turns the `scope` string Google returns into per-scope grants (required ones are checked). */
+export function accessFromGrantedScopes(accessToken: string, scopeString: string): ClassroomRedirectOutcome {
+  const grantedList = scopeString.split(/[\s,]+/).filter(Boolean);
+  const granted = Object.fromEntries(
+    (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[]).map((k) => [k, grantedList.includes(CLASSROOM_SCOPES[k])])
+  ) as Record<ClassroomScopeKey, boolean>;
+  const missingRequired = REQUIRED_SCOPES.filter((k) => !granted[k]);
+  if (missingRequired.length > 0) {
+    revokeAccessToken(accessToken);
+    return {
+      ok: false,
+      error: `Para importar, marque na tela do Google as permissões: ${missingRequired.map((k) => SCOPE_LABELS[k]).join(' e ')}.`,
+    };
+  }
+  const missingOptional = (Object.keys(CLASSROOM_SCOPES) as ClassroomScopeKey[])
+    .filter((k) => !REQUIRED_SCOPES.includes(k) && !granted[k])
+    .map((k) => SCOPE_LABELS[k]);
+  return { ok: true, access: { accessToken, granted, missingOptional } };
+}
+
+/**
+ * Reads what /oauth-callback.html left in sessionStorage, deletes it immediately, and validates it:
+ * the `state` must match the one created before the redirect (CSRF protection) and be recent.
+ * Returns null when there is nothing to process.
+ */
+export function consumeClassroomRedirectResult(): ClassroomRedirectOutcome | null {
+  let rawResult: string | null = null;
+  let rawPending: string | null = null;
+  try {
+    rawResult = sessionStorage.getItem(RESULT_KEY);
+    rawPending = sessionStorage.getItem(PENDING_KEY);
+    sessionStorage.removeItem(RESULT_KEY);
+    sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    return null;
+  }
+  if (rawResult === null) return null;
+
+  let result: any = null;
+  let pending: any = null;
+  try {
+    result = JSON.parse(rawResult);
+    pending = rawPending ? JSON.parse(rawPending) : null;
+  } catch {
+    return { ok: false, error: 'Resposta do Google ilegível. Clique em "Entrar com Google" de novo.' };
+  }
+
+  const token: string | null = result?.access_token || null;
+  const fail = (error: string): ClassroomRedirectOutcome => {
+    if (token) revokeAccessToken(token);
+    return { ok: false, error };
+  };
+
+  if (!pending?.state || !result?.state || pending.state !== result.state) {
+    return fail('A resposta do Google não confere com o pedido feito por este navegador (state inválido). Por segurança, nada foi importado. Clique em "Entrar com Google" de novo.');
+  }
+  if (typeof pending.createdAt !== 'number' || Date.now() - pending.createdAt > REDIRECT_MAX_AGE_MS) {
+    return fail('O login com o Google demorou demais e expirou. Clique em "Entrar com Google" de novo.');
+  }
+  if (result.error) return fail(describeOAuthError(String(result.error)));
+  if (!token) return fail('O Google não devolveu um token de acesso. Tente de novo.');
+
+  try {
+    localStorage.setItem(CONSENTED_KEY, '1');
+  } catch {
+    // optional convenience only
+  }
+  return accessFromGrantedScopes(token, String(result.scope || ''));
 }

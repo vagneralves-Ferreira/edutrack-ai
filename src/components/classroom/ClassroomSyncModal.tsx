@@ -30,11 +30,15 @@ import {
 } from '../../services/classroomSync';
 import { findMatchingSubject } from '../../services/classroomImport';
 import {
+  consumeClassroomRedirectResult,
   getGoogleClientId,
+  hasClassroomRedirectResult,
   isGoogleIdentityLoaded,
   loadGoogleIdentityServices,
   requestClassroomAccess,
   revokeAccessToken,
+  startClassroomRedirect,
+  type ClassroomAccess,
 } from '../../services/googleAuth';
 import type { Subject } from '../../types';
 
@@ -75,7 +79,12 @@ export const ClassroomSyncModal: React.FC = () => {
     subjects,
     applyClassroomSyncResult,
     lastClassroomSync,
+    isPlannerReady,
   } = usePlanner();
+  // Always-current values for async flows (the redirect import starts right after a page load, before the
+  // subjects have been read from Supabase; closures from that first render would see an empty list).
+  const latestRef = useRef({ subjects, apply: applyClassroomSyncResult, ready: isPlannerReady });
+  latestRef.current = { subjects, apply: applyClassroomSyncResult, ready: isPlannerReady };
 
   const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('google_api');
   const [googleReady, setGoogleReady] = useState<boolean>(() => isGoogleIdentityLoaded());
@@ -118,6 +127,23 @@ export const ClassroomSyncModal: React.FC = () => {
     purgeLegacyGoogleStorage();
   }, []);
 
+  // Back from Google (redirect flow): validate and consume the result once the user session is known,
+  // reopen the modal and continue the import with the in-memory token.
+  const runGoogleImportRef = useRef<((access: ClassroomAccess) => Promise<void>) | null>(null);
+  useEffect(() => {
+    if (!userId || !hasClassroomRedirectResult()) return;
+    const outcome = consumeClassroomRedirectResult();
+    if (!outcome) return;
+    setActiveMode('google_api');
+    setIsClassroomModalOpen(true);
+    if (!outcome.ok) {
+      setErrorMsg(outcome.error);
+      return;
+    }
+    void runGoogleImportRef.current?.(outcome.access);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
   // Load Google Identity Services as soon as the modal opens, so the popup opens directly on click.
   useEffect(() => {
     if (!isClassroomModalOpen || !googleClientId) return;
@@ -137,20 +163,18 @@ export const ClassroomSyncModal: React.FC = () => {
     };
   }, [isClassroomModalOpen, googleClientId]);
 
-  if (!isClassroomModalOpen) return null;
-
   const countTasks = (result: ClassroomSyncResult, draftId: string) =>
     result.tasks.filter((t) => t.subjectId === draftId).length;
 
   const autoMatches = (result: ClassroomSyncResult) =>
-    result.subjects.map((draft) => ({ draft, match: findMatchingSubject(draft, subjects) as Subject | null }));
+    result.subjects.map((draft) => ({ draft, match: findMatchingSubject(draft, latestRef.current.subjects) as Subject | null }));
 
   /** Writes the result; throws are shown in the modal. */
   const runApply = async (result: ClassroomSyncResult, chosen: Record<string, CourseResolution>) => {
     setIsLoading(true);
     setStepStatus('Salvando atividades no Supabase (sem duplicar)...');
     try {
-      const summary = await applyClassroomSyncResult(result, chosen);
+      const summary = await latestRef.current.apply(result, chosen);
       setPendingResult(null);
       setResolutions({});
       setSuccessMsg(describeSummary(summary));
@@ -259,11 +283,74 @@ export const ClassroomSyncModal: React.FC = () => {
   };
 
   /**
-   * "Entrar com Google": opens the consent popup (must stay synchronous inside the click), reads Classroom
-   * with the in-memory token, revokes it right away, then follows the usual review + upsert path.
-   * The token is never stored (no state, no localStorage, no Supabase).
+   * Reads Classroom with an in-memory token, revokes it right away, then follows the usual review + upsert
+   * path. Shared by the redirect flow (default) and the popup flow. The token is never stored.
    */
-  const handleGoogleSignIn = () => {
+  const runGoogleImport = async (access: ClassroomAccess) => {
+    let token: string | null = access.accessToken;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsLoading(true);
+    try {
+      setStepStatus('Autorizado! Lendo turmas...');
+      const result = await fetchGoogleClassroomFullData(
+        token,
+        {
+          materials: access.granted.materials,
+          announcements: access.granted.announcements,
+          rosters: access.granted.rosters,
+        },
+        setStepStatus
+      );
+      setStepStatus(`${result.stats.coursesCount} turma(s) e ${result.stats.tasksCount} atividade(s) lidas. Preparando importação...`);
+      // Data is in memory now: give the token back to Google before writing anything.
+      revokeAccessToken(token);
+      token = null;
+
+      const warnings = [...(result.warnings || [])];
+      if (access.missingOptional.length > 0) {
+        warnings.push(`Permissões não concedidas: ${access.missingOptional.join(', ')}. Essas informações ficaram de fora.`);
+      }
+      setWarnMsg(warnings.length > 0 ? warnings.join(' ') : null);
+      // Wait until the user's subjects are loaded, so classes are matched against the real list.
+      if (!latestRef.current.ready) {
+        setStepStatus('Carregando suas disciplinas para vincular as turmas...');
+        const started = Date.now();
+        while (!latestRef.current.ready && Date.now() - started < 20000) {
+          await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+      await processResult(result);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
+    } finally {
+      if (token) revokeAccessToken(token);
+    }
+  };
+  runGoogleImportRef.current = runGoogleImport;
+
+  /** Default: full-page redirect to Google's OAuth 2.0 endpoint; comes back through /oauth-callback.html. */
+  const handleGoogleRedirect = () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setWarnMsg(null);
+    if (!googleClientId) {
+      setErrorMsg('O login com Google ainda não foi configurado neste ambiente (falta VITE_GOOGLE_CLIENT_ID).');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setStepStatus('Redirecionando para o Google...');
+      startClassroomRedirect(googleClientId);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMsg(err?.message || 'Não foi possível iniciar o login com o Google.');
+    }
+  };
+
+  /** Alternative: consent in a popup (must stay synchronous inside the click so it is not blocked). */
+  const handleGooglePopup = () => {
     setErrorMsg(null);
     setSuccessMsg(null);
     setWarnMsg(null);
@@ -282,7 +369,6 @@ export const ClassroomSyncModal: React.FC = () => {
     const controller = new AbortController();
     googleAbortRef.current = controller;
     setAwaitingGoogle(true);
-    // Called synchronously from the click so the browser does not block the popup.
     const accessPromise = requestClassroomAccess(googleClientId, {
       signal: controller.signal,
       onPopupMaybeClosed: () =>
@@ -292,45 +378,23 @@ export const ClassroomSyncModal: React.FC = () => {
     });
 
     void (async () => {
-      let token: string | null = null;
       try {
         const access = await accessPromise;
         setAwaitingGoogle(false);
         googleAbortRef.current = null;
-        token = access.accessToken;
-        setStepStatus('Autorizado! Lendo turmas...');
-        const result = await fetchGoogleClassroomFullData(
-          token,
-          {
-            materials: access.granted.materials,
-            announcements: access.granted.announcements,
-            rosters: access.granted.rosters,
-          },
-          setStepStatus
-        );
-        setStepStatus(`${result.stats.coursesCount} turma(s) e ${result.stats.tasksCount} atividade(s) lidas. Preparando importação...`);
-        // Data is in memory now: give the token back to Google before writing anything.
-        revokeAccessToken(token);
-        token = null;
-
-        const warnings = [...(result.warnings || [])];
-        if (access.missingOptional.length > 0) {
-          warnings.push(`Permissões não concedidas: ${access.missingOptional.join(', ')}. Essas informações ficaram de fora.`);
-        }
-        setWarnMsg(warnings.length > 0 ? warnings.join(' ') : null);
-        await processResult(result);
+        await runGoogleImport(access);
       } catch (err: any) {
         setIsLoading(false);
         if (!controller.signal.aborted) {
           setErrorMsg(err?.message || 'Não foi possível importar do Google Classroom.');
         }
       } finally {
-        if (token) revokeAccessToken(token);
         setAwaitingGoogle(false);
         if (googleAbortRef.current === controller) googleAbortRef.current = null;
       }
     })();
   };
+
   const handlePasteOrJsonImport = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -357,6 +421,8 @@ export const ClassroomSyncModal: React.FC = () => {
     };
     reader.readAsText(file);
   };
+
+  if (!isClassroomModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
@@ -670,16 +736,10 @@ export const ClassroomSyncModal: React.FC = () => {
                     Enquanto isso, use "Colar do Classroom".
                   </div>
                 )}
-                {googleClientId && googleLoadError && (
-                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300">
-                    {googleLoadError}
-                  </div>
-                )}
-
                 <button
                   type="button"
-                  disabled={isLoading || !googleClientId || !googleReady}
-                  onClick={handleGoogleSignIn}
+                  disabled={isLoading || !googleClientId}
+                  onClick={handleGoogleRedirect}
                   className="w-full py-3.5 px-5 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed border border-slate-300 text-slate-800 font-bold text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer"
                 >
                   <svg aria-hidden="true" viewBox="0 0 48 48" className="w-4 h-4">
@@ -688,10 +748,25 @@ export const ClassroomSyncModal: React.FC = () => {
                     <path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z" />
                     <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z" />
                   </svg>
-                  <span>
-                    {isLoading ? 'Importando do Google Classroom...' : googleClientId && !googleReady && !googleLoadError ? 'Carregando login do Google...' : 'Entrar com Google'}
-                  </span>
+                  <span>{isLoading ? 'Importando do Google Classroom...' : 'Entrar com Google'}</span>
                 </button>
+                <p className="text-[11px] text-slate-400 text-center">
+                  Você vai para a página do Google e volta para cá automaticamente.
+                </p>
+
+                {googleClientId && (
+                  <div className="pt-1 text-center">
+                    <button
+                      type="button"
+                      disabled={isLoading || !googleReady}
+                      onClick={handleGooglePopup}
+                      className="text-[11px] font-semibold text-cyan-400 hover:underline underline-offset-4 disabled:opacity-60 disabled:no-underline cursor-pointer"
+                    >
+                      {googleReady ? 'Alternativa: entrar em uma janela pop-up' : googleLoadError ? 'Pop-up indisponível' : 'Carregando opção de pop-up...'}
+                    </button>
+                    {googleLoadError && <p className="mt-1 text-[11px] text-rose-300">{googleLoadError}</p>}
+                  </div>
+                )}
               </div>
             </div>
           )}

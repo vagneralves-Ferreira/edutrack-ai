@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <title>EduTrack AI | Conectando ao Google</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f1f5f9; color: #0f172a;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      @media (prefers-color-scheme: dark) { body { background: #07070b; color: #e2e8f0; } }
+      p { font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <p>Concluindo o login com o Google…</p>
+    <script>
+      /*
+       * Google OAuth 2.0 redirect target (response_type=token). This is a static page on purpose: the SPA root
+       * treats #access_token as a Supabase session, and the HashRouter cannot receive "#access_token=..." anyway.
+       *
+       * It only hands the fragment to the app through sessionStorage (same tab, same origin), removes the token
+       * from the address bar/history, and goes back to the route that started the sign-in. The app validates the
+       * random `state`, deletes the entry immediately and keeps the token in memory until it is revoked.
+       */
+      (function () {
+        var RESULT_KEY = 'edutrack_google_oauth_result';
+        var PENDING_KEY = 'edutrack_google_oauth_pending';
+        var fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        var query = new URLSearchParams(window.location.search);
+        var result = {
+          access_token: fragment.get('access_token'),
+          scope: fragment.get('scope'),
+          expires_in: fragment.get('expires_in'),
+          state: fragment.get('state') || query.get('state'),
+          error: fragment.get('error') || query.get('error'),
+          received_at: Date.now(),
+        };
+
+        // Drop the token from the URL before anything else (no history entry keeps it).
+        try { window.history.replaceState(null, '', window.location.pathname); } catch (e) {}
+
+        var returnTo = '/';
+        try {
+          var pending = JSON.parse(window.sessionStorage.getItem(PENDING_KEY) || 'null');
+          // Only same-app hash routes are accepted (no open redirect).
+          if (pending && typeof pending.returnTo === 'string' && /^#\/[\w\-/?=&.%]*$/.test(pending.returnTo)) {
+            returnTo = '/' + pending.returnTo;
+          }
+          window.sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
+        } catch (e) {}
+
+        window.location.replace(returnTo);
+      })();
+    </script>
+  </body>
+</html>

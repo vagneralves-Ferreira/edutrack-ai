@@ -69,6 +69,8 @@ interface PlannerContextType {
   isNewTaskModalOpen: boolean;
   setIsNewTaskModalOpen: (open: boolean) => void;
   isLoadingData: boolean;
+  /** True once subjects/tasks for the current user were loaded from Supabase (success or error). */
+  isPlannerReady: boolean;
   loadError: string | null;
   loadExampleData: () => Promise<void>;
   resetToDefault: () => void;
@@ -312,6 +314,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [tasks, setTasks] = useState<Task[]>(() => loadTasksFromStorage(userId));
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [isPlannerReady, setIsPlannerReady] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   /** Replaces subjects/tasks in state (and the local cache) with rows read from Supabase. */
@@ -363,6 +366,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Sincronização inicial com o Supabase (SELECT nas tabelas subjects e tasks — sem auto-seed ou fallback mock)
   useEffect(() => {
+    setIsPlannerReady(false);
     if (!userId) return;
     if (fetchInFlightRef.current === userId) return;
     fetchInFlightRef.current = userId;
@@ -415,6 +419,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setLoadError(err?.message || 'Erro ao conectar com o Supabase.');
       } finally {
         setIsLoadingData(false);
+        setIsPlannerReady(true);
         if (fetchInFlightRef.current === userId) {
           fetchInFlightRef.current = null;
         }
@@ -975,6 +980,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isNewTaskModalOpen,
         setIsNewTaskModalOpen,
         isLoadingData,
+        isPlannerReady,
         loadError,
         loadExampleData,
         resetToDefault,
