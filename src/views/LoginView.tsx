@@ -158,29 +158,8 @@ export const LoginView: React.FC = () => {
         {themeToggleContent}
       </button>
 
-      <div className="w-full max-w-4xl screen-stack-stage pt-6">
-        <div
-          onClick={() => navigate('/reset-password')}
-          title="Abrir tela Alterar Minha Senha"
-          className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-75 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
-            Alterar Minha Senha
-          </span>
-          <span className="text-[10px] text-slate-400">Recuperação de Acesso</span>
-        </div>
-        <div
-          onClick={() => navigate('/cadastro')}
-          title="Abrir tela de Cadastro"
-          className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-90 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
-            Criar Perfil Acadêmico • Cadastro
-          </span>
-          <span className="text-[10px] text-slate-300">Clique para puxar para frente →</span>
-        </div>
-
-        <div className="relative z-10 screen-emerge-behind w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
+      <div className="w-full max-w-4xl">
+        <div className="relative z-10 w-full grid grid-cols-1 lg:grid-cols-12 rounded-3xl bento-card overflow-hidden shadow-2xl border-violet-500/25">
         {/* Left Branding Bento Showcase */}
         <div className="hidden lg:flex lg:col-span-6 p-10 bg-gradient-to-br from-violet-950/60 via-[#0d0e18] to-cyan-950/40 border-r border-white/[0.08] flex-col justify-between relative overflow-hidden">
           <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-violet-600/25 blur-3xl" />
@@ -198,12 +177,13 @@ export const LoginView: React.FC = () => {
                 Inteligente
               </span>
             </h2>
-            <p className="text-xs text-slate-300/85 mt-3 leading-relaxed">
+            {/* text-white/xx is intentionally not remapped by the html.light overrides: this panel stays dark in both themes. */}
+            <p className="text-sm text-white/90 mt-3 leading-relaxed">
               Planejamento em Bento Grid integrado ao Supabase e Gemini AI para organizar disciplinas, entregas e estudos de qualquer faculdade.
             </p>
           </div>
 
-          <div className="relative z-10 space-y-2.5 text-xs text-slate-300">
+          <div className="relative z-10 space-y-2.5 text-xs text-white/90">
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Sincronização em nuvem via Supabase</span>
@@ -306,12 +286,23 @@ export const LoginView: React.FC = () => {
             </button>
           </form>
 
-          <p className="text-center text-xs text-slate-400 mt-6">
-            Não tem conta?{' '}
-            <Link to="/cadastro" onClick={handleRegister} className="text-cyan-400 hover:text-violet-300 font-bold">
-              Cadastre-se gratuitamente
+          <div className="mt-6 pt-5 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <Link
+              to="/cadastro"
+              onClick={handleRegister}
+              className="flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-xl border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 text-center transition-colors"
+            >
+              <span className="text-sm font-bold text-violet-200">Criar conta</span>
+              <span className="text-[11px] text-slate-300">Ainda não tem cadastro?</span>
             </Link>
-          </p>
+            <Link
+              to="/reset-password"
+              className="flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-center transition-colors"
+            >
+              <span className="text-sm font-bold text-cyan-300">Alterar minha senha</span>
+              <span className="text-[11px] text-slate-300">Recuperação de acesso</span>
+            </Link>
+          </div>
         </div>
         </div>
       </div>
