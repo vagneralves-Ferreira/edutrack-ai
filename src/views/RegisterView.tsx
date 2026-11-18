@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlanner } from '../context/PlannerContext';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { 
   Sparkles, 
   User, 
@@ -113,9 +114,12 @@ export const RegisterView: React.FC = () => {
           <div className="relative z-10 rounded-3xl bento-card p-7 sm:p-9 shadow-2xl border-violet-500/25">
           
           <div className="mb-7">
-            <h2 className="text-lg font-bold text-white tracking-tight">
-              Criar Perfil Acadêmico
-            </h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                Criar Perfil Acadêmico
+              </h2>
+              <ThemeToggleButton />
+            </div>
             <p className="text-xs text-slate-400 mt-1">
               Preencha os dados abaixo para configurar sua grade do semestre 2026.2.
             </p>
