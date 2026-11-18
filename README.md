@@ -56,7 +56,7 @@ Os enunciados das tarefas usam FlutterFlow, Figma e Xano. Conforme autorizado pe
 - `src/services/classroomSync.ts` — Integração e sincronização com Google Classroom
 - `src/utils/reportGenerator.ts` — Exportação de relatório acadêmico em PDF na web
 - `supabase/functions/ai-dicas/` — Edge Function integrada ao Gemini AI
-- `tables/` & `schema.sql` — Modelagem SQL e políticas RLS
+- `tables/` & `schema.sql` — Modelagem SQL e políticas RLS (diagrama ER em `docs/modelo-de-dados.md`)
 - `scripts/` — Scripts Python (`calculate_progress.py`, `search_subjects.py`, `generate_pdf_report.py`)
 - `openspec/` — Especificações e histórico de propostas arquivadas
 - `docs/` — Documentação de arquitetura, design system, referências e auditoria
