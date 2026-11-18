@@ -33,6 +33,11 @@ edutrack-ai/
 *.sln
 *.sw?
 
+# Course task statements (local copy of the professor's PDFs, not versioned)
+docs/entrega-1/enunciado/
+# Task summary kept local for now
+docs/entrega-1/resumo-tarefas.md
+
 supabase/.temp/
 .vercel
 .env*
