@@ -1,35 +1,44 @@
-# Relatório de Auditoria Geral e Final do Sistema — EduTrack AI
+# Relatório de Auditoria — EduTrack AI
 
-**Projeto:** EduTrack AI  
-**Data da Auditoria:** 2026-11-15 (Atualizado pós-melhorias)  
-**Escopo Auditado:** Tarefas 01 a 15 (Stack React + TypeScript + Tailwind + Supabase + Python + OpenSpec)  
-**Resultado Geral:** 100% APROVADO E CONFORME  
+**Projeto:** EduTrack AI
+**Data da auditoria:** 18/11/2026 (revisão que substitui a versão de 15/11/2026)
+**Escopo:** Tarefas 01 a 16 do Innovation Lab, verificadas no repositório, no GitHub, no Supabase e na Vercel.
+**Stack:** conforme autorizado pelo professor, Supabase substitui o Xano e React + Vite substitui o FlutterFlow.
 
-## 1. Resumo da Conformidade por Tarefa
+**Resultado geral:** a maior parte das tarefas está atendida, várias com ressalvas registradas abaixo. Ainda há itens pendentes (prints de painel e textos do aluno). Esta revisão retira o "100% aprovado" da versão anterior, que não refletia o estado real.
 
-- [x] **Tarefa 01:** Primeiro Contato com Git e GitHub (`README.md`, repositório e commits)  
-- [x] **Tarefa 02:** Ambiente de Desenvolvimento (VS Code, Node.js, TypeScript e Gemini AI)  
-- [x] **Tarefa 03:** Instalação e Inicialização do OpenSpec (`openspec/` e `AGENTS.md`)  
-- [x] **Tarefa 04:** Backend-as-Code com Supabase (`schema.sql`, `tables/`, `supabase/functions/`) — *substituindo Xano*  
-- [x] **Tarefa 05:** Fluxo de Branches e Pull Requests no Git/GitHub  
-- [x] **Tarefa 06:** Pesquisa e Referências de Design (`docs/pesquisa/referencias.md`)  
-- [x] **Tarefa 07:** Arquitetura Frontend em React + Tailwind CSS (`docs/arquitetura-frontend.md`) — *substituindo FlutterFlow*  
-- [x] **Tarefa 08:** Primeira Proposal no OpenSpec (`openspec/changes/archive/`)  
-- [x] **Tarefa 09:** Integração de Design System, Assets e Views (`docs/integracao-design-assets.md`)  
-- [x] **Tarefa 10:** Configuração Avançada do `AGENTS.md` (regras React + Supabase + OpenSpec)  
-- [x] **Tarefa 11:** Tabela `academic_tasks` e RLS (`tables/academic_tasks.sql` + OpenSpec)  
-- [x] **Tarefa 12:** Integração Python Básica (`scripts/calculate_progress.py`)  
-- [x] **Tarefa 13:** Operações CRUD e Segurança RLS de Disciplinas (`tables/subjects_crud_api.sql` + `PlannerContext.tsx`)  
-- [x] **Tarefa 14:** Busca Avançada Híbrida em Python (`scripts/search_subjects.py`)  
-- [x] **Tarefa 15:** Geração de Relatórios Acadêmicos em PDF (`scripts/generate_pdf_report.py` e `src/utils/reportGenerator.ts`)  
+Legenda: **Atendida** · **Atendida com ressalva** · **Pendente**
 
-## 2. Melhorias Recentes Incorporadas
-- **Sincronização com Google Classroom:** `src/services/classroomSync.ts` + anexos de estudo clicáveis.
-- **AI Copilot em Tempo Real:** Integração com Gemini via Supabase Edge Function (`supabase/functions/ai-dicas`).
-- **Tema Claro/Escuro e Responsividade Mobile:** `ThemeContext.tsx`, `color-scheme` e botão de tema integrado ao card de login no celular.
-- **Multi-instituição e Autenticação Completa:** Perfil dinâmico de instituição/curso e recuperação de senha com confirmação por e-mail.
+## 1. Status por tarefa
 
-## 3. Auditoria de Segurança, Build e OpenSpec
-- **Isolamento de Dados (RLS):** Garantido nas políticas SQL por `auth.uid() = user_id`.
-- **Build Frontend:** `npm run build` (`tsc -b && vite build`) validado sem erros.
-- **Rastreabilidade OpenSpec:** `openspec validate --all` aprovado (3/3 specs válidas).
+| Tarefa | Status | Evidência | Ressalva / pendência |
+|---|---|---|---|
+| 01 – Git e GitHub | Atendida com ressalva | Repositório público, `README.md`, primeiro commit `9e61794` | O primeiro commit não está na `main` atual (histórico reescrito); existe no GitHub pelo PR #1. A mensagem não é a sugerida no enunciado. |
+| 02 – VS Code, Node.js e IA | Pendente | Node.js/npm no terminal; VS Code com o projeto | A extensão Gemini Code Assist não está instalada nesta máquina; falta o print com o Gemini. |
+| 03 – OpenSpec | Atendida com ressalva | `openspec/` (commit `de62d0f`), `AGENTS.md`, `openspec/project.md`, `openspec/AGENTS.md` | A versão do OpenSpec usada gera `config.yaml`; `project.md` e `openspec/AGENTS.md` foram escritos depois (PR #6). |
+| 04 – Backend como código | Atendida com ressalva | `schema.sql`, `supabase/migrations/`, `tables/` | Supabase no lugar do Xano. O `tables/academic_tasks.xs` é um esboço da fase Xano, nunca aplicado; não houve pull/push com o Xano. |
+| 05 – Branches e Pull Requests | Atendida com ressalva | PRs #1 a #6 mergeados; README "Tecnologias Utilizadas" | O PR #1 tem um único commit sem alterações de arquivo; a seção do README entrou direto na `main` e foi completada pelo PR #6. |
+| 06 – Referências | Atendida | `docs/pesquisa/referencias.md` (com "Principal Sacada") | — |
+| 07 – Front-end | Atendida (substituição autorizada) | App React na Vercel, `src/lib/supabase.ts`, `vercel ls`/`vercel inspect` | — |
+| 08 – Primeira proposta OpenSpec | Atendida | `openspec/changes/archive/create-subjects-table/` | Tabela `subjects` criada no Supabase, não no Xano. |
+| 09 – Páginas e Design System | Atendida com ressalva | 5 páginas com navegação; `src/index.css`; `docs/integracao-design-assets.md` | A pasta `assets/` está vazia; os assets reais estão em `public/`. Não houve exportação do Figma. |
+| 10 – `AGENTS.md` avançado | Atendida com ressalva | `AGENTS.md` com schema, segurança, comunicação e checklist OpenSpec; proposta arquivada `2026-11-18-update-agents-md-project-rules` | Falta o print da IA confirmando as regras. |
+| 11 – Tabela de tarefas | Atendida com ressalva | `public.tasks` em `schema.sql` e `tables/tasks.sql`; proposta `create-academic-tasks-table` | Especificada como `academic_tasks`; o nome real é `tasks` (equivalência no README). Falta o print das colunas no painel. |
+| 12 – Python: progresso | Atendida | `scripts/calculate_progress.py` (trata divisão por zero) | — |
+| 13 – CRUD com RLS | Atendida com ressalva | Policies `subjects_*_own` em `schema.sql` e `tables/subjects_crud_api.sql`; Data API Docs do Supabase | Falta o print das policies de `subjects` no painel. |
+| 14 – Busca avançada | Atendida com ressalva | `scripts/search_subjects.py` lê o Supabase (REST + RLS) ou a exportação do app; busca "atrasadas" | Sem o token de sessão do usuário o RLS não devolve linhas; o teste com dados reais usa a exportação do app. Não houve PR específico na época. |
+| 15 – Relatório em PDF | Atendida | `scripts/generate_pdf_report.py` e `scripts/generate_progress_report.py` geram PDF real (fpdf2); botão "Relatório PDF" no app | — |
+| 16 – Auditoria e entrega final | Pendente | Este relatório; app em produção | Falta o PR de entrega final e o texto do aluno sobre o OpenSpec. |
+
+## 2. Verificações técnicas (18/11/2026)
+- **Build:** `npm run build` (`tsc -b && vite build`) concluído sem erros.
+- **OpenSpec:** `openspec validate --all` → 3 specs válidas, **sem avisos** (os avisos de Purpose provisório e de requisitos sem SHALL/MUST foram corrigidos).
+- **Banco x repositório:** tabelas e número de colunas conferidos no painel do Supabase (`classroom_ignored_courses` 5, `profiles` 5, `subjects` 10, `tasks` 11), iguais a `schema.sql`.
+- **Isolamento de dados (RLS):** policies `<tabela>_*_own` com `auth.uid() = user_id` (ou `= id` em `profiles`). Uma leitura real da API REST sem token de usuário devolveu 0 linhas.
+- **Produção:** o commit da `main` e o deploy de produção da Vercel eram o mesmo (`ecce216`) na verificação de 18/11.
+
+## 3. Melhorias incorporadas no período
+- Importação real do Google Classroom (OAuth, escopos somente leitura) e gestão de disciplinas.
+- Assistente com Gemini via Supabase Edge Function (`supabase/functions/ai-dicas`).
+- Tema claro/escuro, telas de login, cadastro e senha revisadas, saudação pelo nome do perfil.
+- Exportação dos dados do aluno (JSON) e relatórios PDF em Python com dados reais.
