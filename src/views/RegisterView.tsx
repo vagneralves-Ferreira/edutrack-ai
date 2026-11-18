@@ -86,7 +86,7 @@ export const RegisterView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none font-sans">
+    <div className="min-h-screen bg-transparent text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-20 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-10 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -152,7 +152,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="ex: Alexandre Silva ou Mariana Costa"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
               </div>
             </div>
@@ -173,7 +173,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="Ex: Faculdade Impacta, Cruzeiro do Sul, FIAP, USP..."
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
                 <datalist id="institution-suggestions">
                   <option value="Faculdade Impacta" />
@@ -201,7 +201,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="seu.nome@faculdade.edu.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
                 />
               </div>
             </div>
@@ -222,7 +222,7 @@ export const RegisterView: React.FC = () => {
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
                     placeholder="Ex: ADS, Direito, Engenharia..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                   <datalist id="course-suggestions">
                     <option value="Análise e Desenvolvimento de Sistemas" />
@@ -246,7 +246,7 @@ export const RegisterView: React.FC = () => {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
                   >
                     <option value="1º Semestre">1º Semestre (Calouro)</option>
                     <option value="2º Semestre">2º Semestre</option>
@@ -277,7 +277,7 @@ export const RegisterView: React.FC = () => {
                     placeholder="Mínimo 6 dígitos"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-8 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-8 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                   <button
                     type="button"
@@ -303,7 +303,7 @@ export const RegisterView: React.FC = () => {
                     placeholder="Repita sua senha"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                 </div>
               </div>
