@@ -38,7 +38,7 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateProfileName } = useAuth();
   const { isActive: isTimerActive, formattedTime } = useTimer();
   const { theme, toggleTheme } = useTheme();
 
@@ -125,9 +125,15 @@ export const Header: React.FC = () => {
   const pendingTasksCount = tasks.filter(t => t.status !== 'completed').length;
   const criticalTasks = tasks.filter(t => t.status !== 'completed' && (t.isCriticalMvp || (t.type === 'avaliacao' && t.priority === 'critica')));
 
-  const handleSaveName = () => {
-    if (tempName.trim()) {
-      setStudentName(tempName.trim());
+  const handleSaveName = async () => {
+    const name = tempName.trim();
+    if (name && name !== currentUser?.name) {
+      const result = await updateProfileName(name);
+      if (!result.success) {
+        window.alert(result.error);
+        return;
+      }
+      setStudentName(name);
     }
     setIsEditingName(false);
   };
@@ -336,15 +342,19 @@ export const Header: React.FC = () => {
                   onChange={(e) => setTempName(e.target.value)}
                   className="bg-transparent text-white font-bold text-xs outline-none w-28"
                   autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleSaveName();
+                    if (e.key === 'Escape') setIsEditingName(false);
+                  }}
+                  aria-label="Seu nome"
                 />
-                <button onClick={handleSaveName} className="text-emerald-400 cursor-pointer">
+                <button onClick={() => void handleSaveName()} className="text-emerald-400 cursor-pointer" aria-label="Salvar nome">
                   <Check className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
               <button
-                onClick={() => { setTempName(studentName); setIsEditingName(true); }}
+                onClick={() => { setTempName(currentUser?.name || studentName); setIsEditingName(true); }}
                 className="flex items-center gap-2 px-2.5 py-1 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer"
                 title="Clique para editar seu nome"
               >

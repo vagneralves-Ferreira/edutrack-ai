@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import {
   Mail,
   Lock,
@@ -12,8 +12,6 @@ import {
   ArrowRight,
   Sparkles,
   CheckCircle2,
-  Sun,
-  Moon
 } from 'lucide-react';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,7 +20,6 @@ export const LoginView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signIn, register } = useAuth();
-  const { theme, toggleTheme } = useTheme();
 
   const [email, setEmail] = useState(() => localStorage.getItem('edutrack_recovery_email') || '');
   const [password, setPassword] = useState('');
@@ -134,19 +131,6 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const themeToggleContent =
-    theme === 'dark' ? (
-      <>
-        <Sun className="w-4 h-4 text-amber-400" />
-        <span>Modo Claro</span>
-      </>
-    ) : (
-      <>
-        <Moon className="w-4 h-4 text-violet-600" />
-        <span>Modo Escuro</span>
-      </>
-    );
-
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-4 sm:p-6 relative">
       <div className="w-full max-w-4xl">
@@ -194,14 +178,7 @@ export const LoginView: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">Acessar Cockpit</h1>
             {/* Theme toggle lives inside the login card on every screen size. */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bento-card text-xs font-semibold text-slate-200 hover:border-violet-500/40 transition-all cursor-pointer"
-            >
-              {themeToggleContent}
-            </button>
+            <ThemeToggleButton />
           </div>
           <p className="text-slate-400 text-xs mt-1">Entre com seu e-mail acadêmico ou pessoal</p>
           </div>

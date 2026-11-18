@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlanner } from '../context/PlannerContext';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { 
   Sparkles, 
   User, 
@@ -86,7 +87,7 @@ export const RegisterView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none font-sans">
+    <div className="min-h-screen bg-transparent text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-20 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-10 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -109,31 +110,16 @@ export const RegisterView: React.FC = () => {
 
       {/* Register Form Card */}
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-xl relative z-10 px-4 sm:px-0">
-        <div className="screen-stack-stage pt-6">
-          <div
-            onClick={() => navigate('/reset-password')}
-            className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-75 hover:opacity-100 transition-all"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
-              Alterar Minha Senha
-            </span>
-            <span className="text-[10px] text-slate-400">Recuperação</span>
-          </div>
-          <div
-            onClick={() => navigate('/login')}
-            className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-6 pt-1.5 opacity-90 hover:opacity-100 transition-all"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
-              Acessar Cockpit • Login
-            </span>
-            <span className="text-[10px] text-slate-300">Voltar ao Login →</span>
-          </div>
-          <div className="relative z-10 screen-emerge-behind rounded-3xl bento-card p-7 sm:p-9 shadow-2xl border-violet-500/25">
+        <div>
+          <div className="relative z-10 rounded-3xl bento-card p-7 sm:p-9 shadow-2xl border-violet-500/25">
           
           <div className="mb-7">
-            <h2 className="text-lg font-bold text-white tracking-tight">
-              Criar Perfil Acadêmico
-            </h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                Criar Perfil Acadêmico
+              </h2>
+              <ThemeToggleButton />
+            </div>
             <p className="text-xs text-slate-400 mt-1">
               Preencha os dados abaixo para configurar sua grade do semestre 2026.2.
             </p>
@@ -170,7 +156,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="ex: Alexandre Silva ou Mariana Costa"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
               </div>
             </div>
@@ -191,7 +177,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="Ex: Faculdade Impacta, Cruzeiro do Sul, FIAP, USP..."
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
                 <datalist id="institution-suggestions">
                   <option value="Faculdade Impacta" />
@@ -219,7 +205,7 @@ export const RegisterView: React.FC = () => {
                   placeholder="seu.nome@faculdade.edu.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
                 />
               </div>
             </div>
@@ -240,7 +226,7 @@ export const RegisterView: React.FC = () => {
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
                     placeholder="Ex: ADS, Direito, Engenharia..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                   <datalist id="course-suggestions">
                     <option value="Análise e Desenvolvimento de Sistemas" />
@@ -264,7 +250,7 @@ export const RegisterView: React.FC = () => {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
                   >
                     <option value="1º Semestre">1º Semestre (Calouro)</option>
                     <option value="2º Semestre">2º Semestre</option>
@@ -295,7 +281,7 @@ export const RegisterView: React.FC = () => {
                     placeholder="Mínimo 6 dígitos"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-8 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-8 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                   <button
                     type="button"
@@ -321,7 +307,7 @@ export const RegisterView: React.FC = () => {
                     placeholder="Repita sua senha"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/70 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                   />
                 </div>
               </div>

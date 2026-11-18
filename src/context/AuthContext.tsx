@@ -27,6 +27,10 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string, metadata?: RegisterMetadata) => Promise<any>;
+  /** True when the user has a real name (profiles.nome or signup metadata), not just the e-mail prefix. */
+  hasProfileName: boolean;
+  /** Saves the display name to public.profiles.nome for the signed-in user. */
+  updateProfileName: (name: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -200,9 +204,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { success: true, data };
   };
 
+  const updateProfileName = async (name: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanName = name.trim();
+    if (!user?.id) return { success: false, error: 'Sessão expirada. Faça login novamente.' };
+    if (!cleanName) return { success: false, error: 'Informe um nome.' };
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, nome: cleanName }, { onConflict: 'id' });
+    if (error) return { success: false, error: 'Não foi possível salvar o nome. Tente novamente.' };
+
+    setProfileName(cleanName);
+    return { success: true };
+  };
+
   const emailPrefix = user?.email ? user.email.split('@')[0] : 'Usuário';
   const cleanUserEmail = user?.email?.toLowerCase() || '';
   const supaMeta = (user?.user_metadata || {}) as RegisterMetadata;
+  // Older builds stored the e-mail prefix in profiles.nome; treat that as "no name".
+  const isRealName = (value?: string | null): value is string =>
+    !!value && !!value.trim() && value.trim().toLowerCase() !== emailPrefix.toLowerCase();
+  const realName = isRealName(profileName) ? profileName.trim() : isRealName(supaMeta.name) ? supaMeta.name.trim() : null;
   const resolvedInstitution =
     supaMeta.institution ||
     (cleanUserEmail.includes('impacta.edu') ? 'Faculdade Impacta' : 'Minha Faculdade');
@@ -210,7 +232,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const appUser = user
     ? ({
         ...user,
-        name: profileName || supaMeta.name || emailPrefix,
+        name: realName || emailPrefix,
         institution: resolvedInstitution,
         course: supaMeta.course || 'Graduação',
         semester: supaMeta.semester || '2026.2',
@@ -228,6 +250,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
     logout: signOut,
     register,
+    hasProfileName: !!realName,
+    updateProfileName,
   };
 
   return (

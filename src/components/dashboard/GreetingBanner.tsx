@@ -1,14 +1,34 @@
-import React from 'react';
-import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown, UserPen, Check, X } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
 import { getGreeting, formatDateBR } from '../../utils/helpers';
 import { openAcademicReportPdf } from '../../utils/reportGenerator';
 
 export const GreetingBanner: React.FC = () => {
-  const { setActiveTab, studentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
-  const { currentUser } = useAuth();
-  const { greeting } = getGreeting(studentName);
+  const { setActiveTab, studentName, setStudentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
+  const { currentUser, hasProfileName, updateProfileName } = useAuth();
+  const firstName = hasProfileName && currentUser?.name ? currentUser.name.trim().split(/\s+/)[0] : '';
+  const { greeting } = getGreeting(firstName);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
+
+  const saveName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingName(true);
+    setNameError(null);
+    const result = await updateProfileName(nameInput);
+    setSavingName(false);
+    if (!result.success) {
+      setNameError(result.error || 'Não foi possível salvar o nome.');
+      return;
+    }
+    setStudentName(nameInput.trim());
+    setIsEditingName(false);
+  };
 
   const avgProgress = subjects.length > 0
     ? Math.round(subjects.reduce((sum, s) => sum + s.progress, 0) / subjects.length)
@@ -36,11 +56,57 @@ export const GreetingBanner: React.FC = () => {
           </div>
 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
-            {greeting}{' '}
+            {greeting}{firstName ? '' : '!'}{' '}
             <span className="cockpit-hero-gradient block text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-300 mt-0.5">
               Cockpit Acadêmico
             </span>
           </h1>
+
+          {!hasProfileName && (
+            isEditingName ? (
+              <form onSubmit={saveName} className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Escape' && setIsEditingName(false)}
+                    placeholder="Como você quer ser chamado?"
+                    aria-label="Seu nome"
+                    maxLength={80}
+                    autoFocus
+                    className="flex-1 min-w-0 bg-white/[0.06] border border-white/[0.12] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingName || !nameInput.trim()}
+                    aria-label="Salvar nome"
+                    className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingName(false)}
+                    aria-label="Cancelar"
+                    className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.1] text-slate-300 hover:bg-white/[0.1] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {nameError && <p className="text-[11px] text-rose-300">{nameError}</p>}
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setNameInput(''); setNameError(null); setIsEditingName(true); }}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-300 hover:text-violet-300 cursor-pointer"
+              >
+                <UserPen className="w-3.5 h-3.5" />
+                <span>Adicionar meu nome ao perfil</span>
+              </button>
+            )
+          )}
 
           <p className="text-xs text-slate-300/85 leading-relaxed">
             Acompanhe suas {subjects.length} disciplinas em tempo real, priorize entregas críticas e estude com foco guiado por IA.

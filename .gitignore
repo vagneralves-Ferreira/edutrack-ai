@@ -33,6 +33,9 @@ edutrack-ai/
 *.sln
 *.sw?
 
+# Delivery package (course statements, summary, per-task folders and prints) kept local for now
+docs/entrega-1/
+
 supabase/.temp/
 .vercel
 .env*

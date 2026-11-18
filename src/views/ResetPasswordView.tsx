@@ -53,7 +53,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
 
     const targetEmail = email.trim().toLowerCase();
     if (!targetEmail) {
-      setErrorMessage('Por favor, informe seu e-mail institucional.');
+      setErrorMessage('Por favor, informe seu e-mail.');
       return;
     }
 
@@ -106,26 +106,8 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
 
   return (
     <div className="min-h-screen bg-transparent text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md screen-stack-stage pt-6">
-        <div
-          onClick={() => navigate('/cadastro')}
-          className="screen-deck-layer-2 !pointer-events-auto cursor-pointer flex items-start justify-between px-5 pt-1.5 opacity-75 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80">
-            Criar Perfil Acadêmico
-          </span>
-          <span className="text-[10px] text-slate-400">Cadastro</span>
-        </div>
-        <div
-          onClick={exitToLogin}
-          className="screen-deck-layer-1 !pointer-events-auto cursor-pointer flex items-start justify-between px-5 pt-1.5 opacity-90 hover:opacity-100 transition-all"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
-            Acessar Cockpit • Login
-          </span>
-          <span className="text-[10px] text-slate-300">Voltar ao Login →</span>
-        </div>
-        <div className="relative z-10 screen-emerge-behind w-full bento-card rounded-3xl p-8 border-violet-500/25 shadow-2xl">
+      <div className="w-full max-w-md">
+        <div className="relative z-10 w-full bento-card rounded-3xl p-8 border-violet-500/25 shadow-2xl">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 mb-4 shadow-lg shadow-violet-500/20">
             <KeyRound className="w-7 h-7 text-cyan-400" />
@@ -139,7 +121,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
         <form onSubmit={handleUpdatePassword} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              E-mail Institucional
+              E-mail
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -147,7 +129,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu.email@aluno.impacta.edu.br"
+                placeholder="seu.nome@faculdade.edu.br"
                 className="w-full bg-white/[0.04] border border-white/[0.09] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-all"
               />
             </div>
