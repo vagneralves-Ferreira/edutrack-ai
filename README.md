@@ -20,6 +20,35 @@ Plataforma web de gestão acadêmica inteligente em **Bento Grid**, com sincroni
 - **Python 3** — Scripts de cálculo de progresso, busca híbrida e relatório de progresso em PDF (`scripts/`)
 - **VS Code** — Ambiente principal de desenvolvimento
 
+## 🔁 Equivalências: curso × EduTrack AI
+
+Os enunciados das tarefas usam FlutterFlow, Figma e Xano. Conforme autorizado pelo professor, o EduTrack AI usa as ferramentas abaixo:
+
+| No curso (enunciado) | No EduTrack AI | Onde ver |
+|---|---|---|
+| FlutterFlow (front-end no-code) | React + TypeScript + Vite + Tailwind CSS | `src/views/`, `src/components/` |
+| Figma (design e protótipo) | Design system em código: Tailwind + tokens de tema claro/escuro + ícones `lucide-react` | `src/index.css`, `docs/integracao-design-assets.md` |
+| Xano (banco de dados e API) | Supabase: PostgreSQL + API REST (PostgREST) + Auth + RLS | `schema.sql` |
+| XanoScript (`.xs`) com pull/push | SQL versionado no Git | `schema.sql`, `supabase/migrations/`, `tables/` |
+| API Group do Xano (URL base) | Cliente Supabase com `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.ts` |
+| Swagger do Xano | Supabase → Data API → Docs | painel do Supabase |
+| Tabela `users` do Xano | `auth.users` (Supabase Auth) + `public.profiles` | `schema.sql` |
+| Filtro por usuário no endpoint | Policies RLS `<tabela>_select_own`, `_insert_own`, `_update_own`, `_delete_own` | `schema.sql`, `tables/` |
+| Lógica em Python no Xano | Scripts Python locais | `scripts/` |
+| Link de visualização do FlutterFlow | App publicado na Vercel | https://edutrack-ai-mauve-eight.vercel.app |
+
+**Campos da tabela de tarefas (Tarefa 11):** o enunciado pede `academic_tasks`; a tabela real é `public.tasks`.
+
+| Campo no enunciado (`academic_tasks`) | Coluna real (`public.tasks`) | Observação |
+|---|---|---|
+| `title` (text) | `titulo` (text, obrigatório) | |
+| `description` (text) | `descricao` (text) | |
+| `due_date` (date) | `data_entrega` (timestamptz) | guarda data e hora |
+| `status` (text) | `status` (text, padrão `todo`) | valores: `todo`, `in_progress`, `completed` |
+| `subject_id` → `subjects` | `subject_id` → `subjects(id)` | obrigatório; apaga em cascata |
+| — | `user_id` → `profiles(id)` | dono da tarefa (RLS) |
+| — | `prioridade`, `importado_classroom`, `classroom_id`, `created_at` | campos extras do app |
+
 ## 📁 Estrutura Principal do Projeto
 
 - `src/views/` — Telas principais (`LoginView`, `RegisterView`, `ResetPasswordView`, `DashboardView`, `SubjectsView`, `TasksView`, `TimerView`, `AiAssistantView`)
