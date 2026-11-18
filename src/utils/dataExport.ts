@@ -4,7 +4,8 @@ import type { Subject, Task } from '../types';
 export const EXPORT_FORMAT_VERSION = 1;
 
 interface ExportInput {
-  studentName: string;
+  /** Real profile name only; null when the profile has none (never the e-mail prefix). */
+  studentName: string | null;
   institution: string;
   course?: string;
   semester?: string;

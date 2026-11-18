@@ -208,7 +208,8 @@ export const GreetingBanner: React.FC = () => {
           <button
             onClick={() =>
               downloadUserDataExport({
-                studentName,
+                // Never export the e-mail prefix used as a display fallback.
+                studentName: hasProfileName && currentUser?.name ? currentUser.name : null,
                 institution: currentUser?.institution || 'Minha Faculdade',
                 course: currentUser?.course,
                 semester: currentUser?.semester,

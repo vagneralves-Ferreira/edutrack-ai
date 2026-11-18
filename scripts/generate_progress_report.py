@@ -86,7 +86,7 @@ def build_pdf(data: dict, output: Path) -> None:
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(60, 60, 60)
     info = [
-        f"Aluno: {student.get('name', '-')}",
+        f"Aluno: {student.get('name') or '(nome não informado no perfil)'}",
         f"Instituição: {student.get('institution', '-')}"
         + (f"  |  Curso: {student['course']}" if student.get("course") else "")
         + (f"  |  Semestre: {student['semester']}" if student.get("semester") else ""),
