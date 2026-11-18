@@ -42,3 +42,6 @@ supabase/.temp/
 
 # Python bytecode
 __pycache__/
+
+# Generated PDF reports (scripts/generate_pdf_report.py)
+docs/reports/*.pdf
