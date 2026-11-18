@@ -71,7 +71,7 @@ export function getGreeting(userName = 'Estudante'): { greeting: string; period:
   }
 
   return {
-    greeting: `${greeting}, ${userName}`,
+    greeting: userName ? `${greeting}, ${userName}` : greeting,
     period
   };
 }

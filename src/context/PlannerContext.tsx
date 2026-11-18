@@ -496,7 +496,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
               curso: currentUser?.course || 'Graduação',
               semestre_atual: currentUser?.semester || '2026.2',
             },
-            { onConflict: 'id' }
+            // Only create the profile; never overwrite a name the user edited.
+            { onConflict: 'id', ignoreDuplicates: true }
           );
         }
 
@@ -531,7 +532,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         curso: 'Ciência da Computação',
         semestre_atual: '2026.2',
       },
-      { onConflict: 'id' }
+      // Only create the profile; never overwrite a name the user edited.
+      { onConflict: 'id', ignoreDuplicates: true }
     );
 
     const localSub =
