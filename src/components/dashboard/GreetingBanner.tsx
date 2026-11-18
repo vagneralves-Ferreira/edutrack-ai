@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown, UserPen, Check, X } from 'lucide-react';
+import { ArrowRight, Sparkles, GraduationCap, Flame, FileDown, FileJson, UserPen, Check, X } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
 import { getGreeting, formatDateBR } from '../../utils/helpers';
 import { openAcademicReportPdf } from '../../utils/reportGenerator';
+import { downloadUserDataExport } from '../../utils/dataExport';
 
 export const GreetingBanner: React.FC = () => {
   const { setActiveTab, studentName, setStudentName, subjects, tasks, setIsClassroomModalOpen } = usePlanner();
@@ -203,6 +204,23 @@ export const GreetingBanner: React.FC = () => {
           >
             <FileDown className="w-3.5 h-3.5" />
             <span>Relatório PDF</span>
+          </button>
+          <button
+            onClick={() =>
+              downloadUserDataExport({
+                studentName,
+                institution: currentUser?.institution || 'Minha Faculdade',
+                course: currentUser?.course,
+                semester: currentUser?.semester,
+                subjects,
+                tasks,
+              })
+            }
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-slate-200 font-semibold text-xs transition-all cursor-pointer"
+            title="Baixar meus dados (disciplinas e tarefas) em JSON"
+          >
+            <FileJson className="w-3.5 h-3.5" />
+            <span>Exportar dados</span>
           </button>
         </div>
       </div>
