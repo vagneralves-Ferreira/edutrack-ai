@@ -39,3 +39,6 @@ docs/entrega-1/
 supabase/.temp/
 .vercel
 .env*
+
+# Python bytecode
+__pycache__/
