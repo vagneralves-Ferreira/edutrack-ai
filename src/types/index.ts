@@ -72,6 +72,8 @@ export interface Task {
   isCriticalMvp?: boolean;
   scoreWeight?: string;
   importedFromClassroom?: boolean;
+  /** Stable Google Classroom key (tasks.classroom_id); undefined for manual tasks. */
+  classroomId?: string;
 }
 
 export interface StudySession {

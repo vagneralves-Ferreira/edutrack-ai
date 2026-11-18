@@ -264,6 +264,12 @@ html.light .classroom-modal-header {
   background: linear-gradient(to right, rgba(16, 185, 129, 0.1), #f8fafc, rgba(139, 92, 246, 0.1)) !important;
 }
 
+/* The header has a gradient class, so the generic .text-white remap above skips it; its background is light here. */
+html.light .classroom-modal-header .text-white,
+html.light .classroom-modal-header .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
 html.light .top-header-backdrop {
   background-color: rgba(241, 245, 249, 0.9) !important;
 }

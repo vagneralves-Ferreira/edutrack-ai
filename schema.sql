@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS public.subjects (
   nome TEXT NOT NULL,
   professor TEXT,
   carga_horaria_total INTEGER NOT NULL DEFAULT 80,
+  -- Class schedule edited by the student (supabase/migrations/20261117000000_subject_schedule_and_ignored_courses.sql)
+  horario TEXT,
+  -- Description and syllabus topics edited by the student (supabase/migrations/20261118000000_subject_description_and_topics.sql)
+  descricao TEXT,
+  topicos TEXT[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -44,11 +49,15 @@ CREATE TABLE IF NOT EXISTS public.tasks (
   status TEXT NOT NULL DEFAULT 'todo',
   prioridade TEXT NOT NULL DEFAULT 'media',
   importado_classroom BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Stable Google Classroom key (gc:<courseId>:<courseWorkId>, json:..., paste:<hash>); NULL for manual tasks.
+  -- See supabase/migrations/20261116000000_add_classroom_id_to_tasks.sql
+  classroom_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_subject_id ON public.tasks(subject_id);
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_user_id_classroom_id_key ON public.tasks (user_id, classroom_id);
 
 -- =============================================================================
 -- 4. SEGURANÇA: ROW LEVEL SECURITY (RLS) E POLICIES
@@ -141,4 +150,39 @@ CREATE POLICY "tasks_delete_own"
   ON public.tasks
   FOR DELETE
   TO authenticated
+  USING (auth.uid() = user_id);
+
+-- =============================================================================
+-- 5. TABELA: classroom_ignored_courses
+-- Google Classroom classes the student ignored (e.g. deleted the subject), so syncs do not recreate them.
+-- See supabase/migrations/20261117000000_subject_schedule_and_ignored_courses.sql
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.classroom_ignored_courses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  course_key TEXT NOT NULL, -- gc-course:<courseId> or name:<normalized name>
+  course_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT classroom_ignored_courses_user_id_course_key_key UNIQUE (user_id, course_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_classroom_ignored_courses_user_id ON public.classroom_ignored_courses(user_id);
+
+ALTER TABLE public.classroom_ignored_courses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "classroom_ignored_courses_select_own"
+  ON public.classroom_ignored_courses FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "classroom_ignored_courses_insert_own"
+  ON public.classroom_ignored_courses FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "classroom_ignored_courses_update_own"
+  ON public.classroom_ignored_courses FOR UPDATE TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "classroom_ignored_courses_delete_own"
+  ON public.classroom_ignored_courses FOR DELETE TO authenticated
   USING (auth.uid() = user_id);

@@ -9,11 +9,23 @@ import type {
   TaskStatus,
   TaskType,
 } from '../types';
-import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
+import { pastedTaskKey, normalizeText } from './classroomImport';
+
+/** A Classroom activity ready to become a Kanban card. `subjectId` points to a course draft in `subjects`. */
+export interface ClassroomTaskDraft extends Task {
+  /** Stable dedupe key stored in tasks.classroom_id (gc:<courseId>:<workId>, json:..., paste:<hash>). */
+  classroomId: string;
+  /** Classroom reports the work as turned in or returned. */
+  turnedIn: boolean;
+}
 
 export interface ClassroomSyncResult {
+  /**
+   * One draft per Classroom class. These are NOT the user's subjects: each draft is matched to a registered
+   * subject, created, or ignored when the result is applied (see the "Turmas novas" review in the modal).
+   */
   subjects: Subject[];
-  tasks: Task[];
+  tasks: ClassroomTaskDraft[];
   stats: {
     coursesCount: number;
     tasksCount: number;
@@ -21,7 +33,35 @@ export interface ClassroomSyncResult {
     evaluationsCount: number;
     announcementsCount: number;
   };
-  source: 'google_api' | 'apps_script' | 'custom_import' | 'impacta_full';
+  source: 'google_api' | 'apps_script' | 'custom_import';
+  /** Apps Script only: false when the deployed script answers without checking the secret token. */
+  scriptProtected?: boolean;
+  /** Non-fatal problems to show the user (e.g. a class whose activities could not be read). */
+  warnings?: string[];
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toLocalDateString = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/**
+ * Classroom's dueDate/dueTime are in UTC (an activity due 23:59 in São Paulo is 02:59 UTC on the next day),
+ * so convert them to the browser's local date and time.
+ */
+export function resolveClassroomDue(work: any, now: Date = new Date()): { dueDate: string; dueTime: string } {
+  const dd = work?.dueDate;
+  if (dd?.year) {
+    const month = (dd.month || 1) - 1;
+    const day = dd.day || 1;
+    const t = work.dueTime;
+    if (t && (typeof t.hours === 'number' || typeof t.minutes === 'number')) {
+      const local = new Date(Date.UTC(dd.year, month, day, t.hours || 0, t.minutes || 0));
+      return { dueDate: toLocalDateString(local), dueTime: `${pad2(local.getHours())}:${pad2(local.getMinutes())}` };
+    }
+    return { dueDate: `${dd.year}-${pad2(month + 1)}-${pad2(day)}`, dueTime: '23:59' };
+  }
+  // No due date in Classroom: use the publication date so the card still sorts sensibly.
+  const created = work?.creationTime ? new Date(work.creationTime) : now;
+  return { dueDate: toLocalDateString(isNaN(created.getTime()) ? now : created), dueTime: '23:59' };
 }
 
 export interface RawCourseBundle {
@@ -34,7 +74,35 @@ export interface RawCourseBundle {
   announcements: any[];
 }
 
-export const APPS_SCRIPT_BRIDGE_CODE = `function doGet() {
+/** Placeholder replaced by the user's secret token when the script is copied (see buildAppsScriptCode). */
+export const APPS_SCRIPT_TOKEN_PLACEHOLDER = '__EDUTRACK_TOKEN__';
+
+/**
+ * Apps Script bridge. The web app must be deployed as "Anyone" (a browser on another site cannot send the
+ * user's Google cookies), so it only answers a POST whose body carries the secret token generated in EduTrack.
+ * The token travels in the body, never in the URL, so it does not end up in history or request logs.
+ */
+export const APPS_SCRIPT_BRIDGE_CODE = `var EDUTRACK_TOKEN = '${APPS_SCRIPT_TOKEN_PLACEHOLDER}';
+
+function doPost(e) {
+  var body = {};
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) {}
+  if (!EDUTRACK_TOKEN || EDUTRACK_TOKEN.indexOf('__') === 0 || body.token !== EDUTRACK_TOKEN) {
+    return json_({ error: 'unauthorized', protected: true });
+  }
+  return json_({ generatedAt: new Date().toISOString(), protected: true, courses: readClassroom_() });
+}
+
+// GET never returns data: opening the URL in a browser shows only this message.
+function doGet() {
+  return json_({ error: 'use_post', protected: true });
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readClassroom_() {
   var resp = Classroom.Courses.list({ courseStates: ['ACTIVE'], pageSize: 30 });
   var courses = resp.courses || [];
   var result = courses.map(function(c) {
@@ -60,11 +128,22 @@ export const APPS_SCRIPT_BRIDGE_CODE = `function doGet() {
       announcements: announcements
     };
   });
-  return ContentService.createTextOutput(JSON.stringify({
-    generatedAt: new Date().toISOString(),
-    courses: result
-  })).setMimeType(ContentService.MimeType.JSON);
+  return result;
 }`;
+
+/** Script code with the user's token embedded (what "Copiar Script" puts on the clipboard). */
+export function buildAppsScriptCode(token: string): string {
+  return APPS_SCRIPT_BRIDGE_CODE.replace(APPS_SCRIPT_TOKEN_PLACEHOLDER, token);
+}
+
+/** 32 random bytes, base64url (≈43 chars). Generated in the browser; never sent anywhere but the user's script. */
+export function generateAppsScriptToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 const SUBJECT_PALETTES = [
   { color: '#8b5cf6', accentColor: 'from-violet-500 to-indigo-600' },
@@ -113,7 +192,7 @@ export function buildSyncResultFromCourseBundles(
   source: 'google_api' | 'apps_script'
 ): ClassroomSyncResult {
   const syncedSubjects: Subject[] = [];
-  const syncedTasks: Task[] = [];
+  const syncedTasks: ClassroomTaskDraft[] = [];
   let totalMaterials = 0;
   let totalEvaluations = 0;
   let totalAnnouncements = 0;
@@ -126,12 +205,8 @@ export function buildSyncResultFromCourseBundles(
     const courseSection = course.section ? String(course.section) : '';
     const palette = SUBJECT_PALETTES[i % SUBJECT_PALETTES.length];
 
-    const matchedInit = INITIAL_SUBJECTS.find(
-      (s) =>
-        courseName.toLowerCase().includes(s.name.toLowerCase()) ||
-        s.name.toLowerCase().includes(courseName.toLowerCase())
-    );
-    const subjectId = matchedInit ? matchedInit.id : `classroom-subj-${slugify(courseName)}-${courseId.slice(-4)}`;
+    // Course draft id; the real subject is resolved against the user's own subjects when applying.
+    const subjectId = `gc-course:${courseId}`;
 
     const rawTeachers = Array.isArray(bundle.teachers) ? bundle.teachers : [];
     const teachersList: string[] = rawTeachers
@@ -140,22 +215,16 @@ export function buildSyncResultFromCourseBundles(
       .map((name: string) => (name.toLowerCase().startsWith('prof') ? name : `Prof. ${name}`));
 
     const rawTopics: any[] = Array.isArray(bundle.topics) ? bundle.topics : [];
-    const topicNames =
-      rawTopics.length > 0
-        ? rawTopics.map((t: any) => String(t.name))
-        : matchedInit?.topics || ['Conteúdo Programático sincronizado via Google Classroom'];
+    const topicNames = rawTopics.map((t: any) => String(t.name));
 
-    const modules: SubjectModule[] =
-      rawTopics.length > 0
-        ? rawTopics.map((t: any, idx: number) => ({
-            id: `mod-${courseId}-${t.topicId || idx}`,
-            number: idx + 1,
-            title: String(t.name),
-            hours: Math.round(80 / Math.max(1, rawTopics.length)),
-            description: `Tópico oficial importado da turma ${courseName} no Google Classroom.`,
-            topics: [String(t.name)],
-          }))
-        : matchedInit?.modules || [];
+    const modules: SubjectModule[] = rawTopics.map((t: any, idx: number) => ({
+      id: `mod-${courseId}-${t.topicId || idx}`,
+      number: idx + 1,
+      title: String(t.name),
+      hours: Math.round(80 / Math.max(1, rawTopics.length)),
+      description: `Tópico oficial importado da turma ${courseName} no Google Classroom.`,
+      topics: [String(t.name)],
+    }));
 
     const submissionMap = new Map<string, any>();
     for (const sub of bundle.submissions || []) {
@@ -174,34 +243,19 @@ export function buildSyncResultFromCourseBundles(
       const workDesc = String(work.description || 'Atividade sincronizada diretamente do Google Classroom.');
       const sub = submissionMap.get(workId);
 
-      let status: TaskStatus = 'todo';
-      if (sub?.state === 'TURNED_IN' || sub?.state === 'RETURNED') {
-        status = 'completed';
-        completedWorkCount++;
-      } else if (sub?.state === 'CREATED' || sub?.state === 'RECLAIMED_BY_STUDENT') {
-        status = 'in_progress';
-      }
+      // Only "turned in"/"returned" changes the Kanban status; CREATED is just "assigned, not turned in yet".
+      const turnedIn = sub?.state === 'TURNED_IN' || sub?.state === 'RETURNED';
+      const status: TaskStatus = turnedIn ? 'completed' : 'todo';
+      if (turnedIn) completedWorkCount++;
 
-      let dueDate = '2026-11-30';
-      let dueTime = '23:59';
-      if (work.dueDate && work.dueDate.year) {
-        const y = String(work.dueDate.year);
-        const m = String(work.dueDate.month || 1).padStart(2, '0');
-        const d = String(work.dueDate.day || 1).padStart(2, '0');
-        dueDate = `${y}-${m}-${d}`;
-      } else if (work.creationTime) {
-        dueDate = String(work.creationTime).slice(0, 10);
-      }
-      if (work.dueTime && typeof work.dueTime.hours === 'number') {
-        const hh = String(work.dueTime.hours).padStart(2, '0');
-        const mm = String(work.dueTime.minutes || 0).padStart(2, '0');
-        dueTime = `${hh}:${mm}`;
-      }
+      const { dueDate, dueTime } = resolveClassroomDue(work);
 
       const inferred = inferTaskType(workTitle, workDesc);
 
       syncedTasks.push({
         id: `classroom-${courseId}-${workId}`,
+        classroomId: `gc:${courseId}:${workId}`,
+        turnedIn,
         title: workTitle,
         subjectId,
         subjectName: courseName,
@@ -227,7 +281,7 @@ export function buildSyncResultFromCourseBundles(
         evaluations.push({
           id: `eval-${courseId}-${workId}`,
           name: workTitle,
-          date: dd && mm ? `${dd}/${mm}/${yyyy || '2026'}` : yyyy || '2026',
+          date: dd && mm ? `${dd}/${mm}/${yyyy}` : yyyy,
           weight: work.maxPoints ? Math.min(100, Number(work.maxPoints)) : 25,
           status: status === 'completed' ? 'completed' : 'pending',
           grade: assignedGrade,
@@ -329,39 +383,32 @@ export function buildSyncResultFromCourseBundles(
     }
 
     const totalWork = courseWorkList.length;
-    const progress =
-      totalWork > 0 ? Math.round((completedWorkCount / totalWork) * 100) : matchedInit?.progress ?? 65;
-    const totalHours = matchedInit?.totalHours ?? 80;
+    const progress = totalWork > 0 ? Math.round((completedWorkCount / totalWork) * 100) : 0;
+    const totalHours = 80;
     const completedHours = Math.round((progress / 100) * totalHours);
 
     syncedSubjects.push({
       id: subjectId,
-      code: courseSection || matchedInit?.code || `CLS-${courseId.slice(-3)}`,
+      code: courseSection || `CLS-${courseId.slice(-4)}`,
       name: courseName,
-      professors:
-        matchedInit?.professors?.length
-          ? matchedInit.professors
-          : teachersList.length > 0
-          ? teachersList
-          : ['Prof. Impacta'],
+      professors: teachersList.length > 0 ? teachersList : ['Prof. Responsável'],
       progress,
       totalHours,
       completedHours,
-      studyTimeHours: matchedInit?.studyTimeHours ?? Math.max(4, Math.round(completedHours * 0.35)),
-      color: matchedInit?.color || palette.color,
-      accentColor: matchedInit?.accentColor || palette.accentColor,
-      nextClass: course.room ? `${course.room} • 19:15` : matchedInit?.nextClass || 'Google Classroom • 19:15',
-      schedule: courseSection ? `${courseSection} • 19:15 - 22:00` : matchedInit?.schedule || 'Semestre 2026.2 • 19:15 - 22:00',
-      room: course.room || matchedInit?.room || 'Google Classroom / Impacta',
+      studyTimeHours: 0,
+      color: palette.color,
+      accentColor: palette.accentColor,
+      nextClass: course.room ? `${course.room} • 19:15` : 'Google Classroom',
+      schedule: courseSection ? `${courseSection}` : 'Google Classroom',
+      room: course.room || 'Google Classroom',
       description:
         course.descriptionHeading ||
         course.description ||
-        matchedInit?.description ||
-        `Turma oficial sincronizada do Google Classroom (${courseName}).`,
+        `Turma sincronizada do Google Classroom (${courseName}).`,
       topics: topicNames,
-      modules: modules.length > 0 ? modules : matchedInit?.modules || [],
-      materials: materials.length > 0 ? materials : matchedInit?.materials || [],
-      evaluations: evaluations.length > 0 ? evaluations : matchedInit?.evaluations || [],
+      modules,
+      materials,
+      evaluations,
     });
   }
 
@@ -383,172 +430,219 @@ export function buildSyncResultFromCourseBundles(
  * Conecta via Web App pessoal do Google Apps Script (https://script.google.com/macros/s/.../exec)
  * que lê diretamente Classroom.Courses, Teachers, CourseWork, Submissions, Materials e Announcements.
  */
-export async function fetchGoogleAppsScriptClassroom(webAppUrl: string): Promise<ClassroomSyncResult> {
+export async function fetchGoogleAppsScriptClassroom(webAppUrl: string, token: string): Promise<ClassroomSyncResult> {
   const cleanUrl = webAppUrl.trim();
   if (!cleanUrl.startsWith('https://script.google.com/')) {
     throw new Error('Informe uma URL válida do Google Apps Script começando com https://script.google.com/macros/s/...');
   }
+  if (!token.trim()) {
+    throw new Error('Gere o token secreto, copie o script atualizado para o Apps Script e publique uma nova versão antes de sincronizar.');
+  }
 
-  const res = await fetch(cleanUrl, { method: 'GET', redirect: 'follow' });
+  // text/plain keeps this a "simple" request (no CORS preflight, which Apps Script does not answer).
+  const res = await fetch(cleanUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ token: token.trim() }),
+  });
   if (!res.ok) {
     throw new Error(`Erro HTTP ${res.status} ao consultar o Conector Apps Script. Verifique se a implantação está ativa para "Qualquer pessoa".`);
   }
 
-  const json = await res.json().catch(() => null);
+  let json: any = await res.json().catch(() => null);
+  let scriptProtected = json?.protected === true;
+
+  if (json?.error === 'unauthorized') {
+    throw new Error(
+      'O script recusou o token. Copie o script de novo (ele já leva o token atual), cole no Apps Script e publique em Implantar → Gerenciar implantações → Editar → Nova versão.'
+    );
+  }
+
+  // Old script without doPost: Apps Script answers the POST with an HTML error page. Fall back to the
+  // legacy GET so the import still works, but flag the script as open.
+  if (!json) {
+    const legacy = await fetch(cleanUrl, { method: 'GET', redirect: 'follow' }).catch(() => null);
+    json = legacy && legacy.ok ? await legacy.json().catch(() => null) : null;
+    scriptProtected = false;
+  }
+
   const bundles: RawCourseBundle[] = Array.isArray(json?.courses) ? json.courses : Array.isArray(json) ? json : [];
   if (bundles.length === 0) {
     throw new Error('O Conector Apps Script respondeu sem turmas. Confira se a conta logada no Apps Script possui turmas ativas no Google Classroom.');
   }
 
-  return buildSyncResultFromCourseBundles(bundles, 'apps_script');
+  return { ...buildSyncResultFromCourseBundles(bundles, 'apps_script'), scriptProtected };
 }
 
-/**
- * Conecta diretamente na API REST oficial do Google Classroom (v1) usando um OAuth2 Access Token
- * e importa TODOS os cursos, professores, tópicos, materiais, avisos do mural, atividades, notas e entregas.
- */
-export async function fetchGoogleClassroomFullData(accessToken: string): Promise<ClassroomSyncResult> {
-  const cleanToken = accessToken.trim().replace(/^Bearer\s+/i, '');
-  if (!cleanToken || cleanToken.length < 25 || !cleanToken.startsWith('ya29.')) {
-    throw new Error(
-      'Isso não é um Token OAuth 2.0 válido (Access Token sempre começa com "ya29."). Não digite sua senha de e-mail — use o OAuth Playground (Step 2) ou a aba "Conector Apps Script" / "Colar do Classroom".'
-    );
+export class ClassroomApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
   }
+}
 
-  const headers = {
-    Authorization: `Bearer ${cleanToken}`,
-    Accept: 'application/json',
-  };
+const CLASSROOM_API = 'https://classroom.googleapis.com/v1';
 
-  const coursesRes = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE&pageSize=30', {
-    headers,
+async function classroomGet(path: string, accessToken: string, params: Record<string, string>): Promise<any> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${CLASSROOM_API}/${path}${qs ? `?${qs}` : ''}`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
   });
-
-  if (!coursesRes.ok) {
-    const errBody = await coursesRes.json().catch(() => ({}));
-    const msg =
-      errBody?.error?.message ||
-      `Erro HTTP ${coursesRes.status} ao acessar Google Classroom API. Verifique se o token possui os escopos do Classroom.`;
-    throw new Error(msg);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ClassroomApiError(res.status, String(body?.error?.message || `HTTP ${res.status}`));
   }
+  return res.json();
+}
 
-  const coursesData = await coursesRes.json();
-  const courses: any[] = Array.isArray(coursesData.courses) ? coursesData.courses : [];
+/** Follows nextPageToken so no course, activity or submission is left behind (capped as a safety net). */
+export async function classroomListAll(
+  path: string,
+  key: string,
+  accessToken: string,
+  params: Record<string, string> = {},
+  maxPages = 25
+): Promise<any[]> {
+  const items: any[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+  do {
+    const data = await classroomGet(path, accessToken, { ...params, ...(pageToken ? { pageToken } : {}) });
+    if (Array.isArray(data?.[key])) items.push(...data[key]);
+    pageToken = data?.nextPageToken || undefined;
+    pages++;
+  } while (pageToken && pages < maxPages);
+  return items;
+}
 
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+export interface ClassroomApiGrants {
+  materials: boolean;
+  announcements: boolean;
+  rosters: boolean;
+}
+
+const SESSION_EXPIRED =
+  'A autorização do Google expirou ou foi revogada. Clique em "Entrar com Google" de novo.';
+
+/**
+ * Reads the student's Classroom through the official REST API (v1) with a short-lived OAuth access token.
+ * Courses and activities/submissions are required; materials, announcements and teacher names are read only
+ * when the matching permission was granted. Problems are reported in `warnings` instead of being swallowed.
+ */
+export async function fetchGoogleClassroomFullData(
+  accessToken: string,
+  grants: ClassroomApiGrants = { materials: true, announcements: true, rosters: true },
+  onProgress?: (message: string) => void
+): Promise<ClassroomSyncResult> {
+  const token = accessToken.trim();
+  if (!token) throw new Error(SESSION_EXPIRED);
+
+  let courses: any[];
+  onProgress?.('Lendo suas turmas no Google Classroom...');
+  try {
+    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', studentId: 'me', pageSize: '100' });
+  } catch (err) {
+    if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+    if (err instanceof ClassroomApiError && err.status === 403) {
+      throw new Error(
+        `O Google negou acesso às turmas (403: ${err.message}). Confira se a Google Classroom API está ativada no projeto e se a sua conta permite o acesso.`
+      );
+    }
+    throw err;
+  }
   if (courses.length === 0) {
-    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
+    throw new Error('Nenhuma turma ativa em que você é aluno foi encontrada nesta conta do Google Classroom.');
   }
 
-  const bundles: RawCourseBundle[] = await Promise.all(
-    courses.map(async (course) => {
-      const courseId = String(course.id);
-      const [teachersRes, topicsRes, courseWorkRes, submissionsRes, materialsRes, announcementsRes] =
-        await Promise.all([
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/teachers`, { headers }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/topics`, { headers }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=100`, { headers }).catch(() => null),
-          fetch(
-            `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me&pageSize=100`,
-            { headers }
-          ).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?pageSize=50`, {
-            headers,
-          }).catch(() => null),
-          fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/announcements?pageSize=20`, { headers }).catch(
-            () => null
-          ),
-        ]);
+  const warnings: string[] = [];
+  const failedCourses: string[] = [];
+  const optionalFailures = new Set<string>();
+  const total = courses.length;
+  let done = 0;
+  const courseLabel = `${total} turma${total === 1 ? '' : 's'} encontrada${total === 1 ? '' : 's'}`;
+  onProgress?.(`${courseLabel}. Lendo atividades e entregas (0 de ${total})...`);
+  const markCourseDone = () => {
+    done++;
+    onProgress?.(`${courseLabel}. Lendo atividades e entregas (${done} de ${total})...`);
+  };
 
-      const teachersJson = teachersRes && teachersRes.ok ? await teachersRes.json().catch(() => ({})) : {};
-      const topicsJson = topicsRes && topicsRes.ok ? await topicsRes.json().catch(() => ({})) : {};
-      const courseWorkJson = courseWorkRes && courseWorkRes.ok ? await courseWorkRes.json().catch(() => ({})) : {};
-      const submissionsJson = submissionsRes && submissionsRes.ok ? await submissionsRes.json().catch(() => ({})) : {};
-      const materialsJson = materialsRes && materialsRes.ok ? await materialsRes.json().catch(() => ({})) : {};
-      const announcementsJson =
-        announcementsRes && announcementsRes.ok ? await announcementsRes.json().catch(() => ({})) : {};
+  const optional = async (label: string, run: () => Promise<any[]>): Promise<any[]> => {
+    try {
+      return await run();
+    } catch (err) {
+      if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+      optionalFailures.add(label);
+      return [];
+    }
+  };
 
-      return {
-        course,
-        teachers: Array.isArray(teachersJson.teachers) ? teachersJson.teachers : [],
-        topics: Array.isArray(topicsJson.topic) ? topicsJson.topic : [],
-        courseWork: Array.isArray(courseWorkJson.courseWork) ? courseWorkJson.courseWork : [],
-        submissions: Array.isArray(submissionsJson.studentSubmissions) ? submissionsJson.studentSubmissions : [],
-        materials: Array.isArray(materialsJson.courseWorkMaterial) ? materialsJson.courseWorkMaterial : [],
-        announcements: Array.isArray(announcementsJson.announcements) ? announcementsJson.announcements : [],
-      };
-    })
-  );
+  const bundles = await mapWithLimit(courses, 3, async (course): Promise<RawCourseBundle | null> => {
+    const id = encodeURIComponent(String(course.id));
+    let courseWork: any[];
+    let submissions: any[];
+    try {
+      [courseWork, submissions] = await Promise.all([
+        classroomListAll(`courses/${id}/courseWork`, 'courseWork', token, { pageSize: '100' }),
+        classroomListAll(`courses/${id}/courseWork/-/studentSubmissions`, 'studentSubmissions', token, {
+          userId: 'me',
+          pageSize: '100',
+        }),
+      ]);
+    } catch (err) {
+      if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+      failedCourses.push(`${course.name || course.id}${err instanceof ClassroomApiError ? ` (${err.status})` : ''}`);
+      markCourseDone();
+      return null;
+    }
 
-  return buildSyncResultFromCourseBundles(bundles, 'google_api');
-}
+    const [teachers, materials, announcements] = await Promise.all([
+      grants.rosters
+        ? optional('nomes dos professores', () => classroomListAll(`courses/${id}/teachers`, 'teachers', token, { pageSize: '30' }))
+        : Promise.resolve([]),
+      grants.materials
+        ? optional('materiais', () =>
+            classroomListAll(`courses/${id}/courseWorkMaterials`, 'courseWorkMaterial', token, { pageSize: '100' })
+          )
+        : Promise.resolve([]),
+      grants.announcements
+        ? optional('avisos', () =>
+            // Only the 20 most recent announcements: one page is enough.
+            classroomListAll(`courses/${id}/announcements`, 'announcements', token, { pageSize: '20', orderBy: 'updateTime desc' }, 1)
+          )
+        : Promise.resolve([]),
+    ]);
 
-/**
- * Sincronização Completa Google Classroom (Abastece TODAS as disciplinas, materiais do mural,
- * avaliações, notas, módulos e todas as atividades do Classroom do aluno Impacta).
- */
-export function buildFullClassroomImpactaSync(currentSubjects: Subject[]): ClassroomSyncResult {
-  const fullClassroomTasks: Task[] = INITIAL_TASKS.map((t) => ({
-    ...t,
-    importedFromClassroom: true,
-  }));
-
-  const baseList = currentSubjects.length > 0 ? currentSubjects : INITIAL_SUBJECTS;
-  let materialsCount = 0;
-  let evaluationsCount = 0;
-  let announcementsCount = 0;
-
-  const enrichedSubjects: Subject[] = baseList.map((subj) => {
-    const matchedInitial = INITIAL_SUBJECTS.find((s) => s.id === subj.id || s.name.toLowerCase() === subj.name.toLowerCase());
-    const subjTasks = fullClassroomTasks.filter((t) => t.subjectId === subj.id);
-    const completedCount = subjTasks.filter((t) => t.status === 'completed').length;
-    const calculatedProgress =
-      subjTasks.length > 0
-        ? Math.round((completedCount / subjTasks.length) * 100)
-        : matchedInitial?.progress ?? subj.progress;
-
-    const classroomAnnouncement: StudyMaterial = {
-      id: `cls-mural-${subj.id}`,
-      title: `Mural Google Classroom • ${subj.name}`,
-      category: 'artigo',
-      format: 'Mural Classroom',
-      description: `Avisos oficiais, atividades sincronizadas (${subjTasks.length}) e materiais publicados na turma ${subj.name} (${subj.professors.join(', ')}).`,
-      badge: 'Sincronizado Classroom',
-    };
-
-    const baseMaterials = matchedInitial?.materials || subj.materials || [];
-    const hasClassroomMat = baseMaterials.some((m) => m.id === classroomAnnouncement.id);
-    const mergedMaterials = hasClassroomMat
-      ? baseMaterials
-      : [classroomAnnouncement, ...baseMaterials];
-
-    const syncedEvaluations = matchedInitial?.evaluations || subj.evaluations || [];
-
-    materialsCount += mergedMaterials.length;
-    evaluationsCount += syncedEvaluations.length;
-    announcementsCount += 1;
-
-    return {
-      ...(matchedInitial || subj),
-      id: subj.id,
-      progress: calculatedProgress,
-      completedHours: Math.round((calculatedProgress / 100) * subj.totalHours),
-      materials: mergedMaterials,
-      evaluations: syncedEvaluations,
-    };
+    markCourseDone();
+    return { course, teachers, topics: [], courseWork, submissions, materials, announcements };
   });
 
-  return {
-    subjects: enrichedSubjects,
-    tasks: fullClassroomTasks,
-    stats: {
-      coursesCount: enrichedSubjects.length,
-      tasksCount: fullClassroomTasks.length,
-      materialsCount,
-      evaluationsCount,
-      announcementsCount,
-    },
-    source: 'impacta_full',
-  };
+  const okBundles = bundles.filter((b): b is RawCourseBundle => b !== null);
+  if (failedCourses.length > 0) {
+    warnings.push(`Não foi possível ler as atividades de: ${failedCourses.join(', ')}. As demais turmas foram importadas.`);
+  }
+  if (optionalFailures.size > 0) {
+    warnings.push(`Algumas informações extras não puderam ser lidas (${[...optionalFailures].join(', ')}); as atividades foram importadas normalmente.`);
+  }
+  if (okBundles.length === 0) {
+    throw new Error(warnings[0] || 'Não foi possível ler nenhuma turma do Google Classroom.');
+  }
+
+  return { ...buildSyncResultFromCourseBundles(okBundles, 'google_api'), warnings };
 }
 
 function parsePortugueseDate(text: string): string | null {
@@ -558,7 +652,7 @@ function parsePortugueseDate(text: string): string | null {
     const day = slashMatch[1].padStart(2, '0');
     const month = slashMatch[2].padStart(2, '0');
     const yearRaw = slashMatch[3];
-    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : '2026';
+    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : String(new Date().getFullYear());
     return `${year}-${month}-${day}`;
   }
 
@@ -572,7 +666,7 @@ function parsePortugueseDate(text: string): string | null {
     const day = ptMatch[1].padStart(2, '0');
     const prefix = ptMatch[2].slice(0, 3).toLowerCase();
     if (monthsMap[prefix]) {
-      return `2026-${monthsMap[prefix]}-${day}`;
+      return `${new Date().getFullYear()}-${monthsMap[prefix]}-${day}`;
     }
   }
   return null;
@@ -611,15 +705,99 @@ function looksLikeSourceCode(rawContent: string): boolean {
   return codeLines >= 2 && codeLines / nonEmptyLines.length >= 0.25;
 }
 
+
+const UNASSIGNED_COURSE_NAME = 'Atividades sem turma identificada';
+
+function makeCourseDraft(id: string, name: string, index: number, code?: string): Subject {
+  const palette = SUBJECT_PALETTES[index % SUBJECT_PALETTES.length];
+  return {
+    id,
+    code: code || `CLS-${slugify(name).slice(0, 8).toUpperCase() || 'TURMA'}`,
+    name,
+    professors: ['Prof. Responsável'],
+    progress: 0,
+    totalHours: 80,
+    completedHours: 0,
+    studyTimeHours: 0,
+    color: palette.color,
+    accentColor: palette.accentColor,
+    nextClass: 'Google Classroom',
+    schedule: 'Google Classroom',
+    room: 'Google Classroom',
+    description: `Turma importada do Google Classroom (${name}).`,
+    topics: [],
+    modules: [],
+    materials: [],
+    evaluations: [],
+  };
+}
+
+interface RawPastedItem {
+  title: string;
+  courseName: string | null;
+  courseCode?: string;
+  dueDate: string | null;
+  turnedIn: boolean;
+  urgent?: boolean;
+  description?: string;
+  explicitKey?: string;
+}
+
+/** Groups pasted items by class (course drafts) and gives each one a stable dedupe key. */
+function buildResultFromPastedItems(items: RawPastedItem[]): ClassroomSyncResult {
+  const today = toLocalDateString(new Date());
+  const drafts = new Map<string, Subject>();
+  const tasks: ClassroomTaskDraft[] = [];
+
+  for (const item of items) {
+    const courseName = item.courseName?.trim() || '';
+    const draftId = courseName ? `paste-course:${normalizeText(courseName)}` : 'paste-course:unassigned';
+    if (!drafts.has(draftId)) {
+      drafts.set(draftId, makeCourseDraft(draftId, courseName || UNASSIGNED_COURSE_NAME, drafts.size, item.courseCode));
+    }
+    const draft = drafts.get(draftId)!;
+    const inferred = inferTaskType(item.title, item.description || '');
+    const classroomId = item.explicitKey || pastedTaskKey(item.title, courseName, item.dueDate || 'sem-data');
+
+    tasks.push({
+      id: `classroom-${classroomId}`,
+      classroomId,
+      turnedIn: item.turnedIn,
+      title: item.title,
+      subjectId: draft.id,
+      subjectName: draft.name,
+      dueDate: item.dueDate || today,
+      dueTime: '23:59',
+      priority: item.urgent ? 'alta' : inferred.priority,
+      status: item.turnedIn ? 'completed' : 'todo',
+      type: inferred.type,
+      isCriticalMvp: false,
+      description: item.description || `Importado do Google Classroom${courseName ? ` (${courseName})` : ''}.`,
+      importedFromClassroom: true,
+    });
+  }
+
+  return {
+    subjects: [...drafts.values()],
+    tasks,
+    stats: {
+      coursesCount: drafts.size,
+      tasksCount: tasks.length,
+      materialsCount: 0,
+      evaluationsCount: 0,
+      announcementsCount: 0,
+    },
+    source: 'custom_import',
+  };
+}
+
 /**
- * Interpreta texto colado diretamente da página do Google Classroom ("Pendentes" / "Atividades" / "Turmas")
- * ou JSON exportado do Google Takeout e converte em disciplinas e tarefas do EduTrack AI.
+ * Parses text copied from the Google Classroom pages ("Pendentes" / "Atividades") or a JSON export.
+ * Classes are only recognised when they match one of the user's subjects by name/code; activities without
+ * a recognisable class go to an "unassigned" draft so the user decides where they belong (no silent guess).
+ * Never mixes in sample data.
  */
-export function parseClassroomPastedContent(
-  rawContent: string,
-  existingSubjects: Subject[],
-  replaceExisting = true
-): ClassroomSyncResult {
+export function parseClassroomPastedContent(rawContent: string, existingSubjects: Subject[]): ClassroomSyncResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {
     throw new Error('Cole o conteúdo copiado do Google Classroom ou um JSON válido.');
@@ -631,62 +809,42 @@ export function parseClassroomPastedContent(
     );
   }
 
-  const baseSync = buildFullClassroomImpactaSync(existingSubjects);
-
-  // Caso 1: JSON do Conector Apps Script, Google Takeout ou exportação estruturada
+  // Case 1: JSON (Apps Script connector output or a structured export)
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    let parsed: any = null;
     try {
-      const parsed = JSON.parse(trimmed);
-      // Suporte direto ao JSON completo gerado pelo Conector Google Apps Script
+      parsed = JSON.parse(trimmed);
+    } catch {
+      parsed = null; // fall through to the free-text parser
+    }
+    if (parsed) {
       if (Array.isArray(parsed?.courses) && parsed.courses[0]?.course) {
         return buildSyncResultFromCourseBundles(parsed.courses, 'apps_script');
       }
-      const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || parsed.courses || [];
+      const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || [];
       if (Array.isArray(list) && list.length > 0) {
-        const importedTasks: Task[] = list.map((item: any, idx: number) => {
-          const title = String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`);
-          const subjectName = String(item.subjectName || item.courseName || item.turma || 'Innovation Lab: Advanced No/Low Code');
-          const matchedSub =
-            existingSubjects.find((s) => s.name.toLowerCase().includes(subjectName.toLowerCase())) ||
-            existingSubjects[0] ||
-            INITIAL_SUBJECTS[0];
-          const inferred = inferTaskType(title, String(item.description || ''));
+        const items: RawPastedItem[] = list.map((item: any, idx: number) => {
+          const courseName = item.courseName || item.subjectName || item.turma || null;
+          const rawId = item.id ?? item.courseWorkId;
           return {
-            id: `classroom-json-${Date.now()}-${idx}`,
-            title,
-            subjectId: matchedSub.id,
-            subjectName: matchedSub.name,
-            dueDate: String(item.dueDate || '2026-11-23').slice(0, 10),
-            dueTime: String(item.dueTime || '23:59'),
-            priority: item.priority || inferred.priority,
-            status: item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : 'todo',
-            type: inferred.type,
-            isCriticalMvp: inferred.isCriticalMvp,
-            description: String(item.description || 'Importado via pacote JSON do Google Classroom.'),
-            importedFromClassroom: true,
+            title: String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`),
+            courseName: courseName ? String(courseName) : null,
+            dueDate: item.dueDate ? String(item.dueDate).slice(0, 10) : null,
+            turnedIn:
+              item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' || item.state === 'RETURNED',
+            description: item.description ? String(item.description) : undefined,
+            explicitKey:
+              rawId != null && rawId !== ''
+                ? `json:${item.courseId ?? normalizeText(String(courseName || '')).replace(/ /g, '-')}:${rawId}`
+                : undefined,
           };
         });
-
-        const finalTasks = replaceExisting ? importedTasks : [...importedTasks, ...baseSync.tasks];
-        return {
-          subjects: baseSync.subjects,
-          tasks: finalTasks,
-          stats: {
-            coursesCount: baseSync.subjects.length,
-            tasksCount: finalTasks.length,
-            materialsCount: baseSync.stats.materialsCount,
-            evaluationsCount: baseSync.stats.evaluationsCount,
-            announcementsCount: baseSync.stats.announcementsCount,
-          },
-          source: 'custom_import',
-        };
+        return buildResultFromPastedItems(items);
       }
-    } catch {
-      // Continua para o parser de texto livre
     }
   }
 
-  // Caso 2: Texto copiado direto da tela do Google Classroom (Ctrl+A -> Ctrl+C)
+  // Case 2: text copied straight from the Google Classroom page (Ctrl+A -> Ctrl+C)
   const NOISE_LINE_REGEX =
     /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|\d{1,2}:\d{2})$/i;
 
@@ -695,45 +853,41 @@ export function parseClassroomPastedContent(
     .map((l) => l.trim())
     .filter((l) => l.length > 2 && !/^[A-ZÀ-Ú]$/.test(l));
 
-  const extractedTasks: Task[] = [];
-  let currentSubject = existingSubjects[0] || INITIAL_SUBJECTS[0];
-  let currentStatus: TaskStatus = 'todo';
+  const items: RawPastedItem[] = [];
+  let currentSubject: Subject | null = null;
+  let currentTurnedIn = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (/^(conclu[ií]da|entregue|devolvida|nota\b)/i.test(line)) {
-      if (extractedTasks.length > 0 && /entregue|devolvida/i.test(line)) {
-        extractedTasks[extractedTasks.length - 1].status = 'completed';
+      if (items.length > 0 && /entregue|devolvida/i.test(line)) {
+        items[items.length - 1].turnedIn = true;
       } else {
-        currentStatus = 'completed';
+        currentTurnedIn = true;
       }
       continue;
     }
     if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso)/i.test(line)) {
-      if (extractedTasks.length > 0 && /com atraso|pendente/i.test(line)) {
-        extractedTasks[extractedTasks.length - 1].priority = 'alta';
+      if (items.length > 0 && /com atraso|pendente/i.test(line)) {
+        items[items.length - 1].urgent = true;
       } else {
-        currentStatus = 'todo';
+        currentTurnedIn = false;
       }
       continue;
     }
 
-    // Verifica se a linha menciona alguma disciplina conhecida
+    // A short line naming one of the user's subjects is a class header (or the class of the previous card).
     const matchedSub = existingSubjects.find(
       (s) =>
         line.toLowerCase().includes(s.name.toLowerCase()) ||
         (s.code && line.toLowerCase().includes(s.code.toLowerCase()))
     );
     if (matchedSub && line.length <= matchedSub.name.length + 20) {
-      // Se acabou de criar uma tarefa e a linha seguinte é a disciplina, reatribui à tarefa anterior
-      if (extractedTasks.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
-        const lastTask = extractedTasks[extractedTasks.length - 1];
-        if (lastTask.subjectId !== matchedSub.id) {
-          lastTask.subjectId = matchedSub.id;
-          lastTask.subjectName = matchedSub.name;
-          lastTask.description = `Importado diretamente do Google Classroom (${matchedSub.name}).`;
-        }
+      if (items.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
+        const last = items[items.length - 1];
+        last.courseName = matchedSub.name;
+        last.courseCode = matchedSub.code;
       }
       currentSubject = matchedSub;
       continue;
@@ -743,14 +897,14 @@ export function parseClassroomPastedContent(
       continue;
     }
 
-    // Se a linha é apenas uma data solta pertencente ao card anterior
+    // A date on its own belongs to the previous card.
     const onlyDate = parsePortugueseDate(line);
-    if (onlyDate && line.length < 32 && extractedTasks.length > 0) {
-      extractedTasks[extractedTasks.length - 1].dueDate = onlyDate;
+    if (onlyDate && line.length < 32 && items.length > 0) {
+      items[items.length - 1].dueDate = onlyDate;
       continue;
     }
 
-    let dueDate = onlyDate || '2026-11-23';
+    let dueDate: string | null = onlyDate;
     if (i + 1 < lines.length) {
       const nextDate = parsePortugueseDate(lines[i + 1]);
       if (nextDate && lines[i + 1].length < 32) {
@@ -767,44 +921,20 @@ export function parseClassroomPastedContent(
 
     if (!cleanTitle || cleanTitle.length < 3) continue;
 
-    const inferred = inferTaskType(cleanTitle);
-    extractedTasks.push({
-      id: `classroom-paste-${Date.now()}-${i}`,
+    items.push({
       title: cleanTitle,
-      subjectId: currentSubject.id,
-      subjectName: currentSubject.name,
+      courseName: currentSubject ? currentSubject.name : null,
+      courseCode: currentSubject?.code,
       dueDate,
-      dueTime: '23:59',
-      priority: inferred.priority,
-      status:
-        line.toLowerCase().includes('entregue') || line.toLowerCase().includes('conclu')
-          ? 'completed'
-          : currentStatus,
-      type: inferred.type,
-      isCriticalMvp: inferred.isCriticalMvp,
-      description: `Importado diretamente do Google Classroom (${currentSubject.name}).`,
-      importedFromClassroom: true,
+      turnedIn: currentTurnedIn || /entregue|conclu/i.test(line),
     });
   }
 
-  if (extractedTasks.length === 0) {
+  if (items.length === 0) {
     throw new Error(
       'Nenhuma atividade pôde ser identificada no texto colado. Copie a lista de atividades da aba "Atividades" ou "Pendentes" do Google Classroom (Ctrl+A e Ctrl+C) ou use o Conector Apps Script.'
     );
   }
 
-  const finalTasks = replaceExisting ? extractedTasks : [...extractedTasks, ...baseSync.tasks];
-
-  return {
-    subjects: baseSync.subjects,
-    tasks: finalTasks,
-    stats: {
-      coursesCount: baseSync.subjects.length,
-      tasksCount: finalTasks.length,
-      materialsCount: baseSync.stats.materialsCount,
-      evaluationsCount: baseSync.stats.evaluationsCount,
-      announcementsCount: baseSync.stats.announcementsCount,
-    },
-    source: 'custom_import',
-  };
+  return buildResultFromPastedItems(items);
 }
