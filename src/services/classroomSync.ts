@@ -38,6 +38,8 @@ export interface ClassroomSyncResult {
   scriptProtected?: boolean;
   /** Non-fatal problems to show the user (e.g. a class whose activities could not be read). */
   warnings?: string[];
+  /** Google Classroom courseState per draft subject id (e.g. ACTIVE, PROVISIONED, ARCHIVED). */
+  courseStates?: Record<string, string>;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -193,6 +195,7 @@ export function buildSyncResultFromCourseBundles(
 ): ClassroomSyncResult {
   const syncedSubjects: Subject[] = [];
   const syncedTasks: ClassroomTaskDraft[] = [];
+  const courseStates: Record<string, string> = {};
   let totalMaterials = 0;
   let totalEvaluations = 0;
   let totalAnnouncements = 0;
@@ -207,6 +210,9 @@ export function buildSyncResultFromCourseBundles(
 
     // Course draft id; the real subject is resolved against the user's own subjects when applying.
     const subjectId = `gc-course:${courseId}`;
+    if (course.courseState) {
+      courseStates[subjectId] = String(course.courseState);
+    }
 
     const rawTeachers = Array.isArray(bundle.teachers) ? bundle.teachers : [];
     const teachersList: string[] = rawTeachers
@@ -423,6 +429,7 @@ export function buildSyncResultFromCourseBundles(
       announcementsCount: totalAnnouncements,
     },
     source,
+    courseStates,
   };
 }
 
@@ -555,7 +562,8 @@ export async function fetchGoogleClassroomFullData(
   let courses: any[];
   onProgress?.('Lendo suas turmas no Google Classroom...');
   try {
-    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', pageSize: '100' });
+    const allCourses = await classroomListAll('courses', 'courses', token, { pageSize: '100' });
+    courses = allCourses.filter((c) => c?.courseState !== 'DECLINED' && c?.courseState !== 'SUSPENDED');
   } catch (err) {
     if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
     if (err instanceof ClassroomApiError && err.status === 403) {
