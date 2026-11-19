@@ -122,6 +122,7 @@ export const ClassroomSyncModal: React.FC = () => {
     setErrorScopes(scopes ? { forError: message, scopes } : null);
   };
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [syncDiagnostic, setSyncDiagnostic] = useState<string | null>(null);
 
   useEffect(() => {
     setAppsScriptUrl(userId ? localStorage.getItem(`edutrack_apps_script_url_${userId}`) || '' : '');
@@ -225,6 +226,12 @@ export const ClassroomSyncModal: React.FC = () => {
   const processResult = async (result: ClassroomSyncResult) => {
     const matches = autoMatches(result);
     const unmatched = matches.filter(isNewCourse);
+    const linkedCount = matches.filter((m) => m.match).length;
+    const ignoredCount = matches.filter((m) => m.ignored).length;
+    const courseNames = result.subjects.map((s) => s.name).join(', ');
+    setSyncDiagnostic(
+      `API Classroom: ${result.subjects.length} turma(s) retornada(s)${courseNames ? ` (${courseNames})` : ''} | ${unmatched.length} nova(s) | ${linkedCount} já vinculada(s) | ${ignoredCount} ignorada(s)`
+    );
     if (unmatched.length === 0) {
       await runApply(result, {});
       return;
@@ -926,6 +933,13 @@ export const ClassroomSyncModal: React.FC = () => {
             <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-300">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
               <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Diagnostic summary of Classroom API return */}
+          {syncDiagnostic && (
+            <div className="px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[11px] font-mono text-slate-300 break-words">
+              {syncDiagnostic}
             </div>
           )}
 
