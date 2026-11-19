@@ -49,10 +49,9 @@ export function findMatchingSubject(
   if (exact) return exact;
 
   const courseCompact = compact(course.name);
-  const courseCode = compact(course.code);
   const byCode = subjects.find((s) => {
     const code = compact(s.code);
-    return code.length >= 4 && (courseCompact.includes(code) || (courseCode.length >= 4 && courseCode === code));
+    return code.length >= 4 && courseCompact.includes(code);
   });
   if (byCode) return byCode;
 
