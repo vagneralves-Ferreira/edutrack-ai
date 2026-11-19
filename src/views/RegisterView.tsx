@@ -220,22 +220,18 @@ export const RegisterView: React.FC = () => {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <GraduationCap className="w-4 h-4" />
                   </div>
-                  <input
-                    type="text"
-                    list="course-suggestions"
+                  <select
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
-                    placeholder="Ex: ADS, Direito, Engenharia..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-                  />
-                  <datalist id="course-suggestions">
-                    <option value="Análise e Desenvolvimento de Sistemas" />
-                    <option value="Engenharia de Software" />
-                    <option value="Ciência da Computação" />
-                    <option value="Sistemas de Informação" />
-                    <option value="Administração" />
-                    <option value="Direito" />
-                  </datalist>
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
+                  >
+                    <option value="Análise e Desenvolvimento de Sistemas">Análise e Desenvolvimento de Sistemas</option>
+                    <option value="Engenharia de Software">Engenharia de Software</option>
+                    <option value="Ciência da Computação">Ciência da Computação</option>
+                    <option value="Sistemas de Informação">Sistemas de Informação</option>
+                    <option value="Administração">Administração</option>
+                    <option value="Direito">Direito</option>
+                  </select>
                 </div>
               </div>
 
