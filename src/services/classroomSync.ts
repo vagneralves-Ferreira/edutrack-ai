@@ -555,7 +555,7 @@ export async function fetchGoogleClassroomFullData(
   let courses: any[];
   onProgress?.('Lendo suas turmas no Google Classroom...');
   try {
-    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', studentId: 'me', pageSize: '100' });
+    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', pageSize: '100' });
   } catch (err) {
     if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
     if (err instanceof ClassroomApiError && err.status === 403) {
@@ -566,7 +566,7 @@ export async function fetchGoogleClassroomFullData(
     throw err;
   }
   if (courses.length === 0) {
-    throw new Error('Nenhuma turma ativa em que você é aluno foi encontrada nesta conta do Google Classroom.');
+    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
   }
 
   const warnings: string[] = [];
@@ -591,24 +591,32 @@ export async function fetchGoogleClassroomFullData(
     }
   };
 
-  const bundles = await mapWithLimit(courses, 3, async (course): Promise<RawCourseBundle | null> => {
+  const bundles = await mapWithLimit(courses, 3, async (course): Promise<RawCourseBundle> => {
     const id = encodeURIComponent(String(course.id));
-    let courseWork: any[];
-    let submissions: any[];
-    try {
-      [courseWork, submissions] = await Promise.all([
-        classroomListAll(`courses/${id}/courseWork`, 'courseWork', token, { pageSize: '100' }),
+    let courseWorkFailed = false;
+
+    const readWorkOrEmpty = async (label: string, run: () => Promise<any[]>): Promise<any[]> => {
+      try {
+        return await run();
+      } catch (err) {
+        if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
+        if (!courseWorkFailed) {
+          courseWorkFailed = true;
+          failedCourses.push(`${course.name || course.id} (${label}${err instanceof ClassroomApiError ? `: ${err.status}` : ''})`);
+        }
+        return [];
+      }
+    };
+
+    const [courseWork, submissions] = await Promise.all([
+      readWorkOrEmpty('atividades', () => classroomListAll(`courses/${id}/courseWork`, 'courseWork', token, { pageSize: '100' })),
+      readWorkOrEmpty('entregas', () =>
         classroomListAll(`courses/${id}/courseWork/-/studentSubmissions`, 'studentSubmissions', token, {
           userId: 'me',
           pageSize: '100',
-        }),
-      ]);
-    } catch (err) {
-      if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
-      failedCourses.push(`${course.name || course.id}${err instanceof ClassroomApiError ? ` (${err.status})` : ''}`);
-      markCourseDone();
-      return null;
-    }
+        })
+      ),
+    ]);
 
     const [teachers, materials, announcements] = await Promise.all([
       grants.rosters
@@ -631,18 +639,14 @@ export async function fetchGoogleClassroomFullData(
     return { course, teachers, topics: [], courseWork, submissions, materials, announcements };
   });
 
-  const okBundles = bundles.filter((b): b is RawCourseBundle => b !== null);
   if (failedCourses.length > 0) {
-    warnings.push(`Não foi possível ler as atividades de: ${failedCourses.join(', ')}. As demais turmas foram importadas.`);
+    warnings.push(`Algumas atividades não puderam ser lidas em: ${failedCourses.join(', ')}. As turmas foram mantidas na lista.`);
   }
   if (optionalFailures.size > 0) {
     warnings.push(`Algumas informações extras não puderam ser lidas (${[...optionalFailures].join(', ')}); as atividades foram importadas normalmente.`);
   }
-  if (okBundles.length === 0) {
-    throw new Error(warnings[0] || 'Não foi possível ler nenhuma turma do Google Classroom.');
-  }
 
-  return { ...buildSyncResultFromCourseBundles(okBundles, 'google_api'), warnings };
+  return { ...buildSyncResultFromCourseBundles(bundles, 'google_api'), warnings };
 }
 
 function parsePortugueseDate(text: string): string | null {
