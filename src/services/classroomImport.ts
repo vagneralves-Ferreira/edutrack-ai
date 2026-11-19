@@ -32,11 +32,9 @@ export function pastedTaskKey(title: string, courseName: string, dueDate: string
   return `paste:${stableHash(`${normalizeText(title)}|${normalizeText(courseName)}|${dueDate}`)}`;
 }
 
-const compact = (value?: string | null) => normalizeText(value).replace(/ /g, '');
-
 /**
  * Finds the user's registered subject for a Classroom class name.
- * Order: exact name → subject code inside the class name (e.g. "IMP-INN303") → one name contains the other.
+ * Only matches on exact normalized name so distinct courses are never merged by section/code or partial words.
  */
 export function findMatchingSubject(
   course: { name: string; code?: string },
@@ -45,24 +43,7 @@ export function findMatchingSubject(
   const courseName = normalizeText(course.name);
   if (!courseName) return null;
 
-  const exact = subjects.find((s) => normalizeText(s.name) === courseName);
-  if (exact) return exact;
-
-  const courseCompact = compact(course.name);
-  const byCode = subjects.find((s) => {
-    const code = compact(s.code);
-    return code.length >= 4 && courseCompact.includes(code);
-  });
-  if (byCode) return byCode;
-
-  const contained = subjects
-    .filter((s) => {
-      const name = normalizeText(s.name);
-      const shorter = Math.min(name.length, courseName.length);
-      return shorter >= 8 && (courseName.includes(name) || name.includes(courseName));
-    })
-    .sort((a, b) => normalizeText(b.name).length - normalizeText(a.name).length);
-  return contained[0] || null;
+  return subjects.find((s) => normalizeText(s.name) === courseName) || null;
 }
 
 /** Keys that identify a Classroom class the student chose to ignore (see public.classroom_ignored_courses). */

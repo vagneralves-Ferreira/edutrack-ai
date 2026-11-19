@@ -555,7 +555,7 @@ export async function fetchGoogleClassroomFullData(
   let courses: any[];
   onProgress?.('Lendo suas turmas no Google Classroom...');
   try {
-    courses = await classroomListAll('courses', 'courses', token, { pageSize: '100' });
+    courses = await classroomListAll('courses', 'courses', token, { courseStates: 'ACTIVE', pageSize: '100' });
   } catch (err) {
     if (err instanceof ClassroomApiError && err.status === 401) throw new Error(SESSION_EXPIRED);
     if (err instanceof ClassroomApiError && err.status === 403) {
@@ -566,7 +566,7 @@ export async function fetchGoogleClassroomFullData(
     throw err;
   }
   if (courses.length === 0) {
-    throw new Error('Nenhuma turma foi encontrada nesta conta do Google Classroom.');
+    throw new Error('Nenhuma turma ativa foi encontrada nesta conta do Google Classroom.');
   }
 
   const warnings: string[] = [];
