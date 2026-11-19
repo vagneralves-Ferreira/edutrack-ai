@@ -228,7 +228,10 @@ export const ClassroomSyncModal: React.FC = () => {
     const unmatched = matches.filter(isNewCourse);
     const linkedCount = matches.filter((m) => m.match).length;
     const ignoredCount = matches.filter((m) => m.ignored).length;
-    const courseNames = result.subjects.map((s) => s.name).join(', ');
+    const statesMap = result.courseStates || {};
+    const courseNames = result.subjects
+      .map((s) => `${s.name}${statesMap[s.id] ? ` [${statesMap[s.id]}]` : ''}`)
+      .join(', ');
     setSyncDiagnostic(
       `API Classroom: ${result.subjects.length} turma(s) retornada(s)${courseNames ? ` (${courseNames})` : ''} | ${unmatched.length} nova(s) | ${linkedCount} já vinculada(s) | ${ignoredCount} ignorada(s)`
     );
@@ -237,7 +240,10 @@ export const ClassroomSyncModal: React.FC = () => {
       return;
     }
     const defaults: Record<string, CourseResolution> = {};
-    for (const { draft } of unmatched) defaults[draft.id] = { action: 'create' };
+    for (const { draft } of unmatched) {
+      const state = statesMap[draft.id];
+      defaults[draft.id] = state === 'ARCHIVED' ? { action: 'ignore' } : { action: 'create' };
+    }
     setResolutions(defaults);
     setPendingResult(result);
     setIsLoading(false);
@@ -573,7 +579,14 @@ export const ClassroomSyncModal: React.FC = () => {
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]"
                     >
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{draft.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-white truncate">{draft.name}</p>
+                          {pendingResult.courseStates?.[draft.id] && pendingResult.courseStates[draft.id] !== 'ACTIVE' && (
+                            <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-mono text-slate-300 shrink-0">
+                              {pendingResult.courseStates[draft.id]}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400">{countTasks(pendingResult, draft.id)} atividade(s)</p>
                       </div>
                       <select
