@@ -195,10 +195,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (email: string, password: string, metadata?: RegisterMetadata) => {
     const cleanEmail = email.trim().toLowerCase();
+    const emailRedirectTo =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://edutrack-ai-mauve-eight.vercel.app';
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
-      options: metadata ? { data: metadata } : undefined,
+      options: {
+        emailRedirectTo,
+        ...(metadata ? { data: metadata } : {}),
+      },
     });
     if (error) return { success: false, error: error.message };
     return { success: true, data };

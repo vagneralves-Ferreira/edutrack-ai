@@ -15,6 +15,7 @@ import {
   ArrowRight,
   AlertTriangle,
   Building2,
+  MailCheck,
 } from 'lucide-react';
 
 export const RegisterView: React.FC = () => {
@@ -32,6 +33,7 @@ export const RegisterView: React.FC = () => {
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
 
   // If already logged in, redirect to dashboard
   React.useEffect(() => {
@@ -81,8 +83,13 @@ export const RegisterView: React.FC = () => {
     } else {
       // Sync student name in planner
       setStudentName(name.trim());
-      // Successfully redirect to main Dashboard
-      navigate('/dashboard', { replace: true });
+      if (result.data?.session) {
+        // Successfully redirect to main Dashboard when session is already active
+        navigate('/dashboard', { replace: true });
+      } else {
+        // E-mail confirmation is required before accessing the Dashboard
+        setConfirmationEmail(email.trim().toLowerCase());
+      }
     }
   };
 
@@ -125,22 +132,49 @@ export const RegisterView: React.FC = () => {
             </p>
           </div>
 
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="mb-6 p-4 rounded-xl bg-red-500/15 shadow-md text-xs animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-bold text-red-300 text-xs">
-                    {errorMessage}
-                  </h4>
-                </div>
+          {confirmationEmail ? (
+            <div className="py-4 text-center space-y-5 animate-in fade-in">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mx-auto">
+                <MailCheck className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">
+                  Confirme seu e-mail para ativar a conta
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
+                  Cadastro realizado! Enviamos um link de confirmação para o seu e-mail (
+                  <span className="font-semibold text-amber-300">{confirmationEmail}</span>
+                  ). Clique no link recebido para ativar sua conta e acessar o Cockpit.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all"
+                >
+                  <span>Voltar para o Login</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Error Alert */}
+              {errorMessage && (
+                <div className="mb-6 p-4 rounded-xl bg-red-500/15 shadow-md text-xs animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-red-300 text-xs">
+                        {errorMessage}
+                      </h4>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
             {/* Nome Completo */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -356,6 +390,8 @@ export const RegisterView: React.FC = () => {
               </Link>
             </p>
           </div>
+            </>
+          )}
           </div>
         </div>
 
