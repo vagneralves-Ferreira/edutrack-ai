@@ -268,7 +268,7 @@ function dedupeDbSubjects(dbSubjects: any[]): Subject[] {
   const unique: Subject[] = [];
   for (const dbSub of dbSubjects.map(normalizeSubject)) {
     const alreadyAdded = unique.some(
-      (s) => s.name.toLowerCase() === dbSub.name.toLowerCase() || s.code.toLowerCase() === dbSub.code.toLowerCase()
+      (s) => normalizeText(s.name) === normalizeText(dbSub.name)
     );
     if (!alreadyAdded) unique.push(dbSub);
   }
@@ -745,12 +745,26 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
             (code && String(s.codigo || '').toLowerCase() === code.toLowerCase())
         );
 
+      const makeUniqueCode = (baseCode: string, draftId: string) => {
+        const cleanBase = (baseCode || '').trim() || `CLS-${draftId.replace(/^gc-course:/, '').slice(-4)}`;
+        const codeTaken = (candidate: string) =>
+          knownSubs.some((s) => String(s.codigo || '').trim().toLowerCase() === candidate.toLowerCase());
+        if (!codeTaken(cleanBase)) return cleanBase;
+        const suffix = draftId.replace(/^gc-course:/, '').slice(-4);
+        const withSuffix = suffix ? `${cleanBase} (${suffix})` : cleanBase;
+        if (!codeTaken(withSuffix)) return withSuffix;
+        let n = 2;
+        while (codeTaken(`${cleanBase} (${n})`)) n++;
+        return `${cleanBase} (${n})`;
+      };
+
       const insertDbSubject = async (draft: Subject) => {
+        const uniqueCode = makeUniqueCode(draft.code, draft.id);
         const { data: inserted, error } = await supabase
           .from('subjects')
           .insert({
             user_id: uid,
-            codigo: draft.code,
+            codigo: uniqueCode,
             nome: draft.name,
             professor: draft.professors.join(', ') || 'Prof. Responsável',
             carga_horaria_total: draft.totalHours || 80,

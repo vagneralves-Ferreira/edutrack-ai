@@ -558,6 +558,15 @@ export const ClassroomSyncModal: React.FC = () => {
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {errorMsg && (
+            <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-start gap-2.5 text-xs text-rose-300">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+              <div className="min-w-0">
+                <span>{errorMsg}</span>
+              </div>
+            </div>
+          )}
+
           {pendingResult && (
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3" data-testid="classroom-review">
               <div>
