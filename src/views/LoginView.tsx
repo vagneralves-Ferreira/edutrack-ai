@@ -156,18 +156,18 @@ export const LoginView: React.FC = () => {
             {/* Classes here (text-white/90, bg-white/10, border-white/20, *-200 icons) are deliberately ones the
                 html.light overrides do not remap: this panel stays dark in both themes. */}
             <p className="text-sm text-white/90 mt-3 leading-relaxed">
-              Planejamento em Bento Grid integrado ao Supabase e Gemini AI para organizar disciplinas, entregas e estudos de qualquer faculdade.
+              Organize disciplinas, entregas, provas e sessões de estudo de qualquer instituição em um só lugar, com inteligência artificial.
             </p>
           </div>
 
           <div className="relative z-10 space-y-2.5 text-xs text-white/90">
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
               <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
-              <span>Sincronização em nuvem via Supabase</span>
+              <span>Seus dados sincronizados em nuvem com segurança</span>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20">
               <CheckCircle2 className="w-4 h-4 text-cyan-200 shrink-0" />
-              <span>Dicas de estudo com Gemini AI em tempo real</span>
+              <span>Recomendações personalizadas de estudo com IA</span>
             </div>
           </div>
         </div>

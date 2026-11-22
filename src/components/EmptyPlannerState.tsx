@@ -34,31 +34,34 @@ export const EmptyPlannerState: React.FC<EmptyPlannerStateProps> = ({
           <p className="text-xs text-slate-400 leading-relaxed">{description}</p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <button
             type="button"
             onClick={onAddSubject ?? (() => setActiveTab('disciplinas'))}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 text-white text-xs font-bold cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white text-xs font-bold shadow-lg shadow-violet-600/20 transition-all cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Adicionar disciplina</span>
+            <Plus className="w-4 h-4" />
+            <span>Adicionar Disciplina</span>
           </button>
           <button
             type="button"
             onClick={() => setIsClassroomModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all cursor-pointer"
           >
-            <BookMarked className="w-3.5 h-3.5" />
-            <span>Importar do AVA / Portal</span>
+            <BookMarked className="w-4 h-4" />
+            <span>Importar do Portal</span>
           </button>
+        </div>
+
+        <div className="pt-1">
           <button
             type="button"
             disabled={isLoadingData}
             onClick={() => void loadExampleData()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-200 underline underline-offset-4 transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isLoadingData ? 'Carregando...' : 'Carregar dados de exemplo'}</span>
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>{isLoadingData ? 'Preparando demonstração...' : 'Ou explore com uma grade de demonstração'}</span>
           </button>
         </div>
       </div>

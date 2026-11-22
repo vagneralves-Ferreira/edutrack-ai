@@ -9,19 +9,19 @@ interface AiDicaProps {
 
 const FALLBACK_TIPS: Record<string, string[]> = {
   'Visão Geral': [
-    'Priorize hoje as entregas críticas da semana (Software Engineering e MVP de Innovation Lab) reservando um bloco Pomodoro de 50 minutos sem distrações.',
-    'Revise primeiro as disciplinas com menor percentual de progresso no cockpit para equilibrar sua média semestral antes das provas parciais.',
-    'Divida o estudo diário em 2 ciclos focados: 1 para prática de consultas SQL (JOINs e GROUP BY) e 1 para revisão de arquitetura e modelagem 3FN.',
+    'Priorize hoje as entregas com prazo mais próximo reservando um bloco de foco de 50 minutos sem distrações.',
+    'Revise primeiro as disciplinas com menor percentual de progresso para manter seu semestre equilibrado antes das avaliações.',
+    'Divida seu estudo diário em dois blocos objetivos: um para exercícios práticos e outro para revisão dos tópicos principais.',
   ],
   'Disciplinas': [
-    'Ao revisar a ementa de cada matéria, marque os tópicos já dominados e concentre 70% do seu tempo nos conteúdos práticos cobrados nas avaliações parciais.',
-    'Em SQL Fundamentals e Database Design, pratique escrever queries reais e validar dependências transitivas na 3ª Forma Normal (3FN).',
-    'Combine a leitura dos materiais de Software Engineering com diagramas C4 rápidos para fixar os padrões arquiteturais cobrados pelo professor.',
+    'Ao revisar a ementa de cada matéria, marque os tópicos já dominados e concentre a maior parte do tempo nos conteúdos das próximas provas.',
+    'Crie resumos curtos ao final de cada aula para reduzir o tempo de revisão na véspera das avaliações.',
+    'Combine a leitura dos materiais de apoio com exercícios práticos para fixar melhor os conceitos cobrados.',
   ],
   'Tarefas & Prazos': [
-    'Ataque primeiro os cartões marcados como Prioridade Crítica ou Avaliação MVP no Kanban antes de iniciar listas ou exercícios secundários.',
-    'Mova para "Em Andamento" no máximo 2 tarefas por vez (limite de WIP) para manter foco total e concluir as entregas antes do prazo.',
-    'Reserve os últimos 15 minutos do seu bloco de estudos para atualizar o status das entregas no Kanban e planejar a próxima prioridade.',
+    'Conclua primeiro as entregas de maior prioridade antes de iniciar atividades secundárias.',
+    'Mantenha no máximo 2 tarefas em "Em Andamento" ao mesmo tempo para ganhar ritmo e evitar acúmulo perto do prazo.',
+    'Reserve os últimos 15 minutos do seu estudo para atualizar o progresso das entregas e definir a prioridade de amanhã.',
   ],
 };
 
@@ -98,21 +98,21 @@ export const AiDica: React.FC<AiDicaProps> = ({ tela, contexto }) => {
             </div>
             <div>
               <span className="text-xs font-extrabold text-white block leading-none">
-                Gemini AI Insight
+                Insight de Estudos IA
               </span>
-              <span className="text-[10px] text-fuchsia-300 font-mono">
-                Contexto: {tela}
+              <span className="text-[10px] text-fuchsia-300 font-medium">
+                {tela}
               </span>
             </div>
           </div>
 
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="IA Online" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Assistente disponível" />
         </div>
 
         {loading ? (
           <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
             <p className="text-xs text-fuchsia-300 font-medium animate-pulse">
-              Consultando Gemini para {tela}...
+              Preparando sua recomendação de estudos...
             </p>
             <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full w-1/2 bg-gradient-to-r from-violet-500 to-cyan-400 animate-pulse rounded-full" />
@@ -129,7 +129,7 @@ export const AiDica: React.FC<AiDicaProps> = ({ tela, contexto }) => {
           </div>
         ) : (
           <p className="text-xs text-slate-300/85 leading-relaxed bg-black/25 rounded-2xl p-3 border border-white/[0.05]">
-            Clique abaixo para gerar uma recomendação tática de estudo personalizada via Supabase Edge Function + Gemini.
+            Receba uma recomendação personalizada de estudos com base nas suas disciplinas e prazos.
           </p>
         )}
       </div>

@@ -127,7 +127,7 @@ function describeOAuthError(code: string): string {
     case 'access_denied':
       return 'Você não autorizou o acesso ao Google Classroom. Clique em "Entrar com Google" de novo e permita a leitura.';
     case 'admin_policy_enforced':
-      return 'O administrador da sua conta Google (faculdade) bloqueou este app. Só a TI pode liberar o Client ID do EduTrack no painel de administração. Enquanto isso, use "Colar do Classroom".';
+      return 'O administrador da sua conta institucional restringiu a conexão direta. Use a aba "Importar do Portal" para trazer suas disciplinas e prazos rapidamente.';
     case 'org_internal':
       return 'Este app está configurado como "Interno" de outra organização. Entre com a conta da mesma organização do projeto no Google Cloud.';
     case 'invalid_client':

@@ -165,7 +165,7 @@ export const TasksView: React.FC = () => {
             <span className="flex items-center justify-center w-4 h-4 rounded bg-emerald-500/20 text-emerald-400">
               <BookMarked className="w-3.5 h-3.5" />
             </span>
-            <span>Importar do AVA / Portal</span>
+            <span>Importar do Portal</span>
             <span className="flex items-center gap-0.5 ml-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4285F4]" />
               <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
@@ -280,7 +280,7 @@ export const TasksView: React.FC = () => {
       {tasks.length === 0 ? (
         <EmptyPlannerState
           title="Nenhuma tarefa cadastrada"
-          description="Você ainda não tem tarefas no Supabase. Adicione uma disciplina, importe do seu Ambiente Virtual (Blackboard, Classroom, Canvas, Moodle) ou carregue os dados de exemplo."
+          description="Você ainda não tem tarefas cadastradas. Adicione uma disciplina ou importe suas entregas direto do portal da sua faculdade (Blackboard, Classroom, Canvas, Moodle)."
         />
       ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -575,7 +575,7 @@ export const TasksView: React.FC = () => {
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-[11px] font-semibold text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-[#34A853]" />
-                <span>Google Classroom • OAuth 2.0</span>
+                <span>Sincronização de Portal</span>
               </div>
               <h3 className="text-base font-bold text-white pt-1">
                 {syncStepMessage}

@@ -917,12 +917,12 @@ function buildResultFromPastedItems(
 export function parseClassroomPastedContent(rawContent: string, existingSubjects: Subject[]): ClassroomSyncResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {
-    throw new Error('Cole o conteúdo copiado do seu AVA (Blackboard, Portal do Aluno, Classroom, Canvas, Moodle) ou um JSON válido.');
+    throw new Error('Cole a lista de disciplinas ou prazos copiada do portal da sua faculdade.');
   }
 
   if (looksLikeSourceCode(trimmed)) {
     throw new Error(
-      'O texto colado parece ser código JavaScript/Apps Script, não a lista de disciplinas ou atividades. Abra seu AVA (Blackboard, Portal do Aluno ou Google Classroom), copie o conteúdo da página (Ctrl+A → Ctrl+C) e cole aqui.'
+      'O conteúdo colado parece ser código de programação, não uma lista de disciplinas ou atividades. Copie a página de disciplinas ou prazos no portal da sua faculdade e cole aqui.'
     );
   }
 
@@ -1120,7 +1120,7 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
 
   if (items.length === 0 && discoveredSubjects.size === 0) {
     throw new Error(
-      'Nenhuma disciplina ou atividade pôde ser identificada no texto colado. Copie a página de Disciplinas ou Calendário/Atividades do seu AVA (Blackboard, Portal do Aluno, Google Classroom, Canvas ou Moodle) com Ctrl+A e Ctrl+C.'
+      'Nenhuma disciplina ou entrega foi identificada no texto colado. Copie a lista de disciplinas ou prazos do portal da sua faculdade e tente novamente.'
     );
   }
 
