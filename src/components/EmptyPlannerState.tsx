@@ -49,7 +49,7 @@ export const EmptyPlannerState: React.FC<EmptyPlannerStateProps> = ({
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold cursor-pointer"
           >
             <BookMarked className="w-3.5 h-3.5" />
-            <span>Sincronizar Classroom</span>
+            <span>Importar do AVA / Portal</span>
           </button>
           <button
             type="button"

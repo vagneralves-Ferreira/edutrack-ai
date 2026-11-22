@@ -18,30 +18,17 @@ import { NewTaskModal } from './components/tasks/NewTaskModal';
 import { ClassroomSyncModal } from './components/classroom/ClassroomSyncModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase, missingSupabaseEnv } from './lib/supabase';
+import { parseAuthRedirect } from './utils/authRedirect';
 
 // Captura os parâmetros da URL antes do HashRouter modificar o hash
 const INITIAL_PATHNAME = window.location.pathname || '';
 const INITIAL_HASH = window.location.hash || '';
 const INITIAL_SEARCH = window.location.search || '';
-
-function parseHashParams(hashStr: string): URLSearchParams {
-  const cleaned = hashStr.replace(/^#\/?/, '');
-  const queryStart = cleaned.indexOf('?');
-  if (queryStart !== -1) {
-    return new URLSearchParams(cleaned.slice(queryStart + 1));
-  }
-  return new URLSearchParams(cleaned);
-}
-
-const INITIAL_HASH_PARAMS = parseHashParams(INITIAL_HASH);
-const INITIAL_SEARCH_PARAMS = new URLSearchParams(INITIAL_SEARCH);
-
-const IS_INITIAL_RECOVERY =
-  INITIAL_PATHNAME.includes('reset-password') ||
-  INITIAL_HASH.includes('reset-password') ||
-  INITIAL_HASH.includes('type=recovery') ||
-  INITIAL_HASH.includes('otp_expired') ||
-  INITIAL_SEARCH.includes('type=recovery');
+const INITIAL_AUTH_REDIRECT = parseAuthRedirect(INITIAL_PATHNAME, INITIAL_SEARCH, INITIAL_HASH);
+const INITIAL_HASH_PARAMS = INITIAL_AUTH_REDIRECT.hashParams;
+const INITIAL_SEARCH_PARAMS = INITIAL_AUTH_REDIRECT.searchParams;
+const IS_INITIAL_RECOVERY = INITIAL_AUTH_REDIRECT.isRecovery;
+const IS_INITIAL_SIGNUP = INITIAL_AUTH_REDIRECT.isSignupConfirmation;
 
 const COCKPIT_SCREENS = [
   { path: '/dashboard', label: 'Cockpit Acadêmico', element: <DashboardView /> },
@@ -160,14 +147,32 @@ export default function App() {
       supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
+      }).finally(() => {
+        if (IS_INITIAL_SIGNUP) {
+          setIsRecoveryFlow(false);
+          window.history.replaceState(null, '', '/#/dashboard');
+        }
       });
     } else if (code) {
-      supabase.auth.exchangeCodeForSession(code);
+      supabase.auth.exchangeCodeForSession(code).finally(() => {
+        if (IS_INITIAL_SIGNUP) {
+          setIsRecoveryFlow(false);
+          window.history.replaceState(null, '', '/#/dashboard');
+        }
+      });
     } else if (tokenHash) {
       supabase.auth.verifyOtp({
         token_hash: tokenHash,
-        type: 'recovery',
+        type: INITIAL_AUTH_REDIRECT.otpType,
+      }).finally(() => {
+        if (IS_INITIAL_SIGNUP) {
+          setIsRecoveryFlow(false);
+          window.history.replaceState(null, '', '/#/dashboard');
+        }
       });
+    } else if (IS_INITIAL_SIGNUP) {
+      setIsRecoveryFlow(false);
+      window.history.replaceState(null, '', '/#/dashboard');
     }
 
     if (missingSupabaseEnv.length > 0) return;
@@ -177,6 +182,8 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecoveryFlow(true);
+      } else if (event === 'SIGNED_IN' && IS_INITIAL_SIGNUP) {
+        setIsRecoveryFlow(false);
       }
     });
     return () => subscription.unsubscribe();
@@ -211,9 +218,7 @@ export default function App() {
             <TimerProvider>
               {isRecoveryFlow ? (
                 <ResetPasswordView
-                  initialExpired={
-                    INITIAL_HASH.includes('otp_expired') || INITIAL_SEARCH.includes('otp_expired')
-                  }
+                  initialExpired={INITIAL_AUTH_REDIRECT.isRecoveryOtpExpired}
                   onFinishRecovery={() => setIsRecoveryFlow(false)}
                 />
               ) : (

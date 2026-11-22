@@ -486,18 +486,18 @@ export const ClassroomSyncModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-                  Central de Conexão Google Classroom
+                  Central de Importação & AVA
                 </h3>
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-[10px] font-bold text-slate-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#4285F4]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-[#FBBC05]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-[#EA4335]" />
-                  <span className="ml-0.5">Workspace</span>
+                  <span className="ml-0.5">Multi-AVA</span>
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Vincule todas as turmas, atividades, materiais de aula, avisos do mural e notas ao EduTrack AI
+                Importe disciplinas, atividades e entregas do Google Classroom, Blackboard, Canvas, Moodle ou Portal do Aluno
               </p>
             </div>
           </div>
@@ -530,8 +530,8 @@ export const ClassroomSyncModal: React.FC = () => {
         <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2 border-b border-white/[0.06]" role="tablist">
           {(
             [
-              { mode: 'google_api', label: '1. Entrar com Google', Icon: KeyRound },
-              { mode: 'paste_import', label: '2. Colar do Classroom (Ctrl+A)', Icon: FileJson },
+              { mode: 'google_api', label: '1. Google Classroom (OAuth)', Icon: KeyRound },
+              { mode: 'paste_import', label: '2. Colar do Portal / Blackboard (Ctrl+V)', Icon: FileJson },
               { mode: 'apps_script', label: '3. Apps Script (contas pessoais)', Icon: Link2 },
             ] as const
           ).map(({ mode, label, Icon }) => (
@@ -816,7 +816,7 @@ export const ClassroomSyncModal: React.FC = () => {
                 {!googleClientId && (
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
                     O login com Google ainda não foi configurado neste ambiente (falta <code>VITE_GOOGLE_CLIENT_ID</code>).
-                    Enquanto isso, use "Colar do Classroom".
+                    Enquanto isso, use "Colar do Portal / Blackboard (Ctrl+V)".
                   </div>
                 )}
                 <button
@@ -859,7 +859,7 @@ export const ClassroomSyncModal: React.FC = () => {
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-bold text-slate-200">
-                    Modo Rápido (10 segundos): Copie sua página do Google Classroom ou envie um JSON
+                    Modo Rápido (10 segundos): Copie sua página do Blackboard, Portal do Aluno, Classroom, Canvas ou Moodle
                   </label>
                   <label className="px-3 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 text-[11px] font-bold text-violet-300 cursor-pointer">
                     Carregar Arquivo .JSON
@@ -867,7 +867,7 @@ export const ClassroomSyncModal: React.FC = () => {
                   </label>
                 </div>
                 <ol className="text-[11px] text-slate-300 space-y-1 list-decimal list-inside bg-black/25 rounded-xl p-3 border border-white/[0.05]">
-                  <li>Abra a aba <strong>Atividades</strong> da disciplina no Google Classroom (ex: Innovation Lab) ou a tela <strong>Pendentes / Concluídas</strong>.</li>
+                  <li>Abra a página de <strong>Disciplinas / Cursos</strong> ou <strong>Calendário / Atividades</strong> no seu AVA (Blackboard, Área do Aluno UNICID / Cruzeiro do Sul, Google Classroom, Canvas ou Moodle).</li>
                   <li>Pressione <strong>Ctrl + A</strong> (selecionar tudo) e depois <strong>Ctrl + C</strong> (copiar).</li>
                   <li>Clique na caixa abaixo, pressione <strong>Ctrl + V</strong> e clique em <strong>Processar e Abastecer</strong>.</li>
                 </ol>
@@ -875,7 +875,7 @@ export const ClassroomSyncModal: React.FC = () => {
                   rows={5}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Abra seu Google Classroom -> Atividades ou Pendentes -> copie (Ctrl+C) e cole (Ctrl+V) aqui..."
+                  placeholder="Abra seu Blackboard, Portal do Aluno, Classroom, Canvas ou Moodle -> copie a tela de Disciplinas ou Calendário (Ctrl+A, Ctrl+C) e cole (Ctrl+V) aqui..."
                   className="w-full bg-black/40 border border-white/[0.1] rounded-xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                 />
                 <button

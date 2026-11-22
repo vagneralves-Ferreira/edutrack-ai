@@ -51,7 +51,7 @@ export const QuickStats: React.FC<QuickStatsProps> = ({ subjects, tasks }) => {
       <div className="bento-card-interactive rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden border-rose-500/25">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-rose-500 to-orange-500" />
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">Pendentes Classroom</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">Entregas Pendentes</span>
           <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
             <Flame className="w-3.5 h-3.5" />
           </div>

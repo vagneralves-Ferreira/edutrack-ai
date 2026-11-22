@@ -232,14 +232,14 @@ export const Header: React.FC = () => {
 
         {/* Right: Actions, Theme Toggle, Clock, Notifications, User Profile */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Google Classroom Sync Hub Button */}
+          {/* AVA / Portal Import Hub Button */}
           <button
             onClick={() => setIsClassroomModalOpen(true)}
             className="hidden md:flex items-center gap-1.5 px-2.5 2xl:px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer shrink-0"
-            title="Vincular e sincronizar todas as informações do Google Classroom"
+            title="Central de Importação & AVA (Blackboard, Classroom, Canvas, Moodle)"
           >
             <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden 2xl:inline">Classroom</span>
+            <span className="hidden 2xl:inline">Importar AVA</span>
           </button>
 
           {/* Quick New Task Button */}

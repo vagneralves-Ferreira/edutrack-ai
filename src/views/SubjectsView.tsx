@@ -184,7 +184,7 @@ export const SubjectsView: React.FC = () => {
             className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer shrink-0"
           >
             <BookMarked className="w-4 h-4 text-emerald-400" />
-            <span>Sincronizar Classroom</span>
+            <span>Importar do AVA / Portal</span>
           </button>
 
           <button
@@ -231,7 +231,7 @@ export const SubjectsView: React.FC = () => {
       {subjects.length === 0 ? (
         <EmptyPlannerState
           title="Nenhuma disciplina cadastrada"
-          description="Sua grade está vazia. Adicione uma disciplina manualmente, sincronize com o Google Classroom ou carregue os dados de exemplo."
+          description="Sua grade está vazia. Adicione uma disciplina manualmente, importe do seu Ambiente Virtual (Blackboard, Classroom, Canvas, Moodle) ou carregue os dados de exemplo."
           onAddSubject={() => setIsModalOpen(true)}
         />
       ) : (

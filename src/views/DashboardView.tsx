@@ -67,7 +67,7 @@ export const DashboardView: React.FC = () => {
         {subjects.length === 0 ? (
           <EmptyPlannerState
             title="Nenhuma disciplina cadastrada"
-            description="Adicione sua primeira disciplina, sincronize com o Google Classroom ou carregue os dados de exemplo."
+            description="Adicione sua primeira disciplina, importe do seu Ambiente Virtual (Blackboard, Classroom, Canvas, Moodle) ou carregue os dados de exemplo."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
