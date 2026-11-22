@@ -399,8 +399,8 @@ select optgroup {
   color: #0f172a;
 }
 
-.dark select option,
-.dark select optgroup {
+html.dark select option,
+html.dark select optgroup {
   background-color: #1e293b;
   color: #f8fafc;
 }

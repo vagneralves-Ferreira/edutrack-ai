@@ -279,7 +279,7 @@ export const RegisterView: React.FC = () => {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 border border-white/[0.09] text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
                   >
                     <optgroup label="Graduação / Tecnólogo">
                       <option value="1º Semestre">1º Semestre (Calouro)</option>
