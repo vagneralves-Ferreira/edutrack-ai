@@ -12,7 +12,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "build:extension": "tsc -p extension/tsconfig.json && vite build --config extension/vite.config.ts"
   },
   "build": {
     "files": [

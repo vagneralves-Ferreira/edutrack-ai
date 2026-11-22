@@ -7,19 +7,19 @@ const CORS = {
 
 const FALLBACK_DICAS: Record<string, string[]> = {
   "Visão Geral": [
-    "Priorize hoje as entregas críticas da semana (Software Engineering e MVP de Innovation Lab) reservando um bloco Pomodoro de 50 minutos sem distrações.",
-    "Comece revisando a disciplina com menor percentual de conclusão no seu cockpit para equilibrar o progresso antes das avaliações parciais.",
-    "Divida sua sessão de hoje em dois blocos focados: 25 min para prática de queries SQL (JOIN e GROUP BY) e 25 min para revisão de modelagem 3FN.",
+    "Priorize hoje as entregas com prazo mais próximo reservando um bloco Pomodoro de 50 minutos sem distrações.",
+    "Comece revisando a disciplina com menor percentual de conclusão no seu painel para equilibrar o progresso antes das avaliações.",
+    "Divida sua sessão de hoje em dois blocos focados: um para exercícios práticos e outro para revisão dos conteúdos principais.",
   ],
   "Disciplinas": [
-    "Ao estudar cada matéria da grade, foque primeiro nos tópicos práticos cobrados nas avaliações parciais e marque os conteúdos já revisados.",
-    "Para SQL Fundamentals e Database Design, pratique escrever consultas com INNER/LEFT JOIN e validar dependências funcionais na 3ª Forma Normal (3FN).",
-    "Em Software Engineering, revise os diagramas de arquitetura C4 e os critérios de aceite do protótipo antes da entrega parcial.",
+    "Ao estudar cada matéria da grade, foque primeiro nos tópicos práticos cobrados nas avaliações e marque os conteúdos já revisados.",
+    "Crie resumos curtos ao final de cada aula para reduzir o tempo de revisão na véspera das provas.",
+    "Combine a leitura dos materiais de apoio com exercícios práticos para fixar melhor os conceitos cobrados.",
   ],
   "Tarefas & Prazos": [
-    "Ataque primeiro os cartões com prioridade Crítica ou Avaliação MVP no Kanban antes de iniciar listas ou exercícios de menor peso.",
-    "Mantenha no máximo 2 tarefas na coluna 'Em Andamento' por vez para evitar troca de contexto e concluir suas entregas mais rápido.",
-    "Quebre as entregas maiores do Kanban em subtarefas de 25 minutos e use o Timer Pomodoro para avançar com consistência hoje.",
+    "Conclua primeiro as entregas de maior prioridade no quadro antes de iniciar atividades secundárias.",
+    "Mantenha no máximo 2 tarefas em 'Em Andamento' por vez para evitar troca de contexto e concluir suas entregas mais rápido.",
+    "Quebre as entregas maiores em blocos de 25 minutos e use o Timer Pomodoro para avançar com consistência hoje.",
   ],
 };
 
@@ -40,11 +40,17 @@ Deno.serve(async (req) => {
 
   let tela = "Visão Geral";
   let contexto: Record<string, unknown> = {};
+  let mode = "tip";
+  let rawPortalText = "";
+  let portalName = "Portal Acadêmico";
 
   try {
     const body = await req.json();
     if (body?.tela) tela = String(body.tela);
     if (body?.contexto && typeof body.contexto === "object") contexto = body.contexto;
+    if (body?.mode) mode = String(body.mode);
+    if (body?.text) rawPortalText = String(body.text).slice(0, 8000);
+    if (body?.portalName) portalName = String(body.portalName).slice(0, 80);
   } catch {
     // Mantém valores padrão
   }
@@ -64,13 +70,85 @@ Deno.serve(async (req) => {
       });
     }
 
+    const chave = Deno.env.get("GEMINI_API_KEY") ?? "";
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+    if (mode === "extract_portal") {
+      if (!rawPortalText.trim()) {
+        return new Response(JSON.stringify({ subjects: [], tasks: [], source: "empty" }), {
+          headers: { ...CORS, "Content-Type": "application/json" },
+        });
+      }
+
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const extractPrompt = `Você extrai disciplinas universitárias e prazos/atividades de texto copiado de portais acadêmicos (${portalName}). Data atual: ${todayIso}.
+Responda APENAS com um JSON válido no formato exato:
+{"subjects":[{"name":"Nome da Disciplina","code":"CODIGO_OPCIONAL","professor":"Professor Opcional"}],"tasks":[{"title":"Nome da Atividade","courseName":"Nome da Disciplina","dueDate":"YYYY-MM-DD ou null","description":"Resumo curto opcional"}]}
+Regras:
+- Extraia apenas disciplinas reais e entregas/provas/atividades reais presentes no texto.
+- Ignore menus, botões, rodapés, links de suporte, avisos genéricos e texto irrelevante.
+- Não invente itens nem datas. Se não houver data, use null.
+- Responda somente o JSON puro, sem markdown ou explicações.
+
+TEXTO DO PORTAL:
+${rawPortalText}`;
+
+      if (chave) {
+        for (const model of models) {
+          try {
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-goog-api-key": chave },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: extractPrompt }] }],
+                  generationConfig: {
+                    maxOutputTokens: 1800,
+                    temperature: 0.1,
+                    responseMimeType: "application/json",
+                    ...(model.startsWith("gemini-2.5")
+                      ? { thinkingConfig: { thinkingBudget: 0 } }
+                      : {}),
+                  },
+                }),
+                signal: AbortSignal.timeout(9000),
+              }
+            );
+
+            if (geminiRes.ok) {
+              const data = await geminiRes.json();
+              const parts = data?.candidates?.[0]?.content?.parts ?? [];
+              const textPart = parts.find(
+                (p: { text?: string }) => typeof p?.text === "string" && p.text.trim().length > 0
+              );
+              if (textPart?.text) {
+                const cleaned = textPart.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleaned);
+                const subjects = Array.isArray(parsed?.subjects) ? parsed.subjects : [];
+                const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+                return new Response(
+                  JSON.stringify({ subjects, tasks, source: model }),
+                  { headers: { ...CORS, "Content-Type": "application/json" } }
+                );
+              }
+            }
+          } catch (innerErr) {
+            console.error(`Falha na extração assistida via ${model}:`, innerErr);
+          }
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ subjects: [], tasks: [], source: "unavailable" }),
+        { headers: { ...CORS, "Content-Type": "application/json" } }
+      );
+    }
+
     const prompt = `Voce e o assistente de estudos do EduTrack AI, um planner academico de estudante universitario.
 O usuario esta na tela "${tela}" do app. Contexto: ${JSON.stringify(contexto ?? {})}.
 Gere UMA dica curta (maximo 2 frases), pratica e especifica para esse contexto, em portugues do Brasil.
 Responda apenas com o texto da dica, sem titulos nem markdown.`;
-
-    const chave = Deno.env.get("GEMINI_API_KEY") ?? "";
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
     if (chave) {
       for (const model of models) {
