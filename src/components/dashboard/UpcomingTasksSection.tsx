@@ -70,10 +70,10 @@ export const UpcomingTasksSection: React.FC = () => {
               onClick={handleSyncClassroom}
               disabled={isSyncingClassroom}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-all cursor-pointer"
-              title="Sincronizar com Google Classroom"
+              title="Importar do AVA / Portal"
             >
               <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Classroom</span>
+              <span className="hidden sm:inline">Importar AVA</span>
             </button>
 
             <div className="flex p-1 rounded-xl bg-black/40 border border-white/[0.07] text-xs">

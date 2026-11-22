@@ -165,7 +165,7 @@ export const TasksView: React.FC = () => {
             <span className="flex items-center justify-center w-4 h-4 rounded bg-emerald-500/20 text-emerald-400">
               <BookMarked className="w-3.5 h-3.5" />
             </span>
-            <span>Sincronizar Classroom</span>
+            <span>Importar do AVA / Portal</span>
             <span className="flex items-center gap-0.5 ml-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4285F4]" />
               <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
@@ -280,7 +280,7 @@ export const TasksView: React.FC = () => {
       {tasks.length === 0 ? (
         <EmptyPlannerState
           title="Nenhuma tarefa cadastrada"
-          description="Você ainda não tem tarefas no Supabase. Adicione uma disciplina, sincronize com o Google Classroom ou carregue os dados de exemplo."
+          description="Você ainda não tem tarefas no Supabase. Adicione uma disciplina, importe do seu Ambiente Virtual (Blackboard, Classroom, Canvas, Moodle) ou carregue os dados de exemplo."
         />
       ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

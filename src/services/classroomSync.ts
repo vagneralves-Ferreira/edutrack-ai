@@ -738,27 +738,40 @@ export async function fetchGoogleClassroomFullData(
 }
 
 function parsePortugueseDate(text: string): string | null {
-  // DD/MM/YYYY or DD/MM
-  const slashMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
-  if (slashMatch) {
-    const day = slashMatch[1].padStart(2, '0');
-    const month = slashMatch[2].padStart(2, '0');
-    const yearRaw = slashMatch[3];
-    const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : String(new Date().getFullYear());
-    return `${year}-${month}-${day}`;
+  // ISO YYYY-MM-DD
+  const isoMatch = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // "07 de nov." / "19 de novembro"
+  // DD/MM/YYYY, DD/MM/YY, DD/MM or DD-MM-YYYY
+  const slashMatch = text.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+  if (slashMatch) {
+    const dayNum = Number(slashMatch[1]);
+    const monthNum = Number(slashMatch[2]);
+    if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12) {
+      const day = slashMatch[1].padStart(2, '0');
+      const month = slashMatch[2].padStart(2, '0');
+      const yearRaw = slashMatch[3];
+      const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : String(new Date().getFullYear());
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // "07 de nov.", "19 de novembro de 2026", "15 nov 2026", "15 nov."
   const monthsMap: Record<string, string> = {
     jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06',
     jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
   };
-  const ptMatch = text.toLowerCase().match(/\b(\d{1,2})\s+de\s+([a-zç]{3,})/i);
+  const ptMatch = text
+    .toLowerCase()
+    .match(/\b(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç.]*(?:\s+(?:de\s+)?(20\d{2}))?\b/i);
   if (ptMatch) {
     const day = ptMatch[1].padStart(2, '0');
     const prefix = ptMatch[2].slice(0, 3).toLowerCase();
     if (monthsMap[prefix]) {
-      return `${new Date().getFullYear()}-${monthsMap[prefix]}-${day}`;
+      const year = ptMatch[3] || String(new Date().getFullYear());
+      return `${year}-${monthsMap[prefix]}-${day}`;
     }
   }
   return null;
@@ -804,7 +817,7 @@ function makeCourseDraft(id: string, name: string, index: number, code?: string)
   const palette = SUBJECT_PALETTES[index % SUBJECT_PALETTES.length];
   return {
     id,
-    code: code || `CLS-${slugify(name).slice(0, 8).toUpperCase() || 'TURMA'}`,
+    code: code || `AVA-${slugify(name).slice(0, 8).toUpperCase() || 'TURMA'}`,
     name,
     professors: ['Prof. Responsável'],
     progress: 0,
@@ -813,10 +826,10 @@ function makeCourseDraft(id: string, name: string, index: number, code?: string)
     studyTimeHours: 0,
     color: palette.color,
     accentColor: palette.accentColor,
-    nextClass: 'Google Classroom',
-    schedule: 'Google Classroom',
-    room: 'Google Classroom',
-    description: `Turma importada do Google Classroom (${name}).`,
+    nextClass: 'AVA / Portal',
+    schedule: 'AVA / Portal',
+    room: 'AVA / Portal',
+    description: `Disciplina importada do AVA / Portal (${name}).`,
     topics: [],
     modules: [],
     materials: [],
@@ -836,10 +849,22 @@ interface RawPastedItem {
 }
 
 /** Groups pasted items by class (course drafts) and gives each one a stable dedupe key. */
-function buildResultFromPastedItems(items: RawPastedItem[]): ClassroomSyncResult {
+function buildResultFromPastedItems(
+  items: RawPastedItem[],
+  extraSubjects: Array<{ name: string; code?: string }> = []
+): ClassroomSyncResult {
   const today = toLocalDateString(new Date());
   const drafts = new Map<string, Subject>();
   const tasks: ClassroomTaskDraft[] = [];
+
+  for (const sub of extraSubjects) {
+    const cleanName = sub.name.trim();
+    if (!cleanName) continue;
+    const draftId = `paste-course:${normalizeText(cleanName)}`;
+    if (!drafts.has(draftId)) {
+      drafts.set(draftId, makeCourseDraft(draftId, cleanName, drafts.size, sub.code));
+    }
+  }
 
   for (const item of items) {
     const courseName = item.courseName?.trim() || '';
@@ -864,7 +889,7 @@ function buildResultFromPastedItems(items: RawPastedItem[]): ClassroomSyncResult
       status: item.turnedIn ? 'completed' : 'todo',
       type: inferred.type,
       isCriticalMvp: false,
-      description: item.description || `Importado do Google Classroom${courseName ? ` (${courseName})` : ''}.`,
+      description: item.description || `Importado do AVA / Portal${courseName ? ` (${courseName})` : ''}.`,
       importedFromClassroom: true,
     });
   }
@@ -892,12 +917,12 @@ function buildResultFromPastedItems(items: RawPastedItem[]): ClassroomSyncResult
 export function parseClassroomPastedContent(rawContent: string, existingSubjects: Subject[]): ClassroomSyncResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {
-    throw new Error('Cole o conteúdo copiado do Google Classroom ou um JSON válido.');
+    throw new Error('Cole o conteúdo copiado do seu AVA (Blackboard, Portal do Aluno, Classroom, Canvas, Moodle) ou um JSON válido.');
   }
 
   if (looksLikeSourceCode(trimmed)) {
     throw new Error(
-      'O texto colado parece ser código JavaScript/Apps Script, não a lista de atividades. Para importar por texto, abra o Google Classroom na aba "Atividades" ou "Pendentes", copie o conteúdo da página (Ctrl+A → Ctrl+C) e cole aqui.'
+      'O texto colado parece ser código JavaScript/Apps Script, não a lista de disciplinas ou atividades. Abra seu AVA (Blackboard, Portal do Aluno ou Google Classroom), copie o conteúdo da página (Ctrl+A → Ctrl+C) e cole aqui.'
     );
   }
 
@@ -919,7 +944,7 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
           const courseName = item.courseName || item.subjectName || item.turma || null;
           const rawId = item.id ?? item.courseWorkId;
           return {
-            title: String(item.title || item.titulo || item.name || `Atividade Classroom #${idx + 1}`),
+            title: String(item.title || item.titulo || item.name || `Atividade AVA #${idx + 1}`),
             courseName: courseName ? String(courseName) : null,
             dueDate: item.dueDate ? String(item.dueDate).slice(0, 10) : null,
             turnedIn:
@@ -936,9 +961,17 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
     }
   }
 
-  // Case 2: text copied straight from the Google Classroom page (Ctrl+A -> Ctrl+C)
+  // Case 2: text copied straight from Google Classroom, Blackboard, Área do Aluno (UNICID/Cruzeiro do Sul), Canvas or Moodle
   const NOISE_LINE_REGEX =
-    /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|\d{1,2}:\d{2})$/i;
+    /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|blackboard(\s+learn)?|canvas|moodle|[áa]rea do aluno|portal do aluno|p[áa]gina da institui[çc][ãa]o|fluxo de atividades|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|cursos(\s+atuais)?|todos os cursos|meus cursos|minhas disciplinas|disciplinas|organiza[çc][õo]es|calend[áa]rio|mensagens|ferramentas|sair|acessibilidade|privacidade|termos|pesquisar cursos.*|filtro|filtros|aberto|fechado|privado|m[óo]dulos|avisos|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|sem prazo|hoje|amanh[ãa]|pr[óo]xim[oa]s?|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|visualizar|carregar mais|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|cruzeiro do sul(\s+educacional)?|unicid|v[áa]rios instrutores|\d{1,2}:\d{2})$/i;
+
+  const EXPLICIT_SUBJECT_REGEX = /^(?:disciplina|curso|mat[ée]ria|turma)\s*[:\-–]\s*(.{3,100})$/i;
+  const CODE_AND_SUBJECT_REGEX =
+    /^((?:20\d{2}[._-]?\d?[._-]?)?(?:[A-Z]{2,8}[._-])*[A-Z]{2,8}[._-]?\d{2,6}(?:[._-][A-Z0-9]+)*|\d{5,9}(?:[._-]\d{1,4})?|20\d{2}[./-][12])\s*[-–—•|:]\s*(.{4,100})$/;
+  const STANDALONE_COURSE_CODE_REGEX =
+    /^(?:20\d{2}[._-]\d[._-][A-Z0-9._-]{2,}|[A-Z]{2,6}[_-]\d{2,6}(?:[_-][A-Z0-9]+)*|\d{5,9}[_-][A-Z0-9_-]{2,})$/;
+  const DATE_ONLY_LABEL_REGEX =
+    /^(?:(?:data de entrega|entrega|prazo|vence em|vencimento|due(?:\s+date)?)\s*[:\-–]?\s*)?(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{4}-\d{2}-\d{2}|\d{1,2}\s+(?:de\s+)?(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç.]*(?:\s+(?:de\s+)?20\d{2})?)(?:\s*(?:[àa]s|-|•|,)?\s*\d{1,2}:\d{2}(?::\d{2})?)?$/i;
 
   const lines = trimmed
     .split(/\r?\n/)
@@ -946,22 +979,34 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
     .filter((l) => l.length > 2 && !/^[A-ZÀ-Ú]$/.test(l));
 
   const items: RawPastedItem[] = [];
-  let currentSubject: Subject | null = null;
+  const discoveredSubjects = new Map<string, { name: string; code?: string }>();
+  let currentSubject: { name: string; code?: string } | null = null;
   let currentTurnedIn = false;
+  let pendingDueDate: string | null = null;
+
+  const registerSubject = (name: string, code?: string) => {
+    const cleanName = name.replace(/\s+/g, ' ').trim();
+    if (cleanName.length < 3) return null;
+    const key = normalizeText(cleanName);
+    if (!discoveredSubjects.has(key)) {
+      discoveredSubjects.set(key, { name: cleanName, code });
+    }
+    return discoveredSubjects.get(key)!;
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (/^(conclu[ií]da|entregue|devolvida|nota\b)/i.test(line)) {
-      if (items.length > 0 && /entregue|devolvida/i.test(line)) {
+    if (/^(conclu[ií]da|entregue|devolvida|enviado|nota\b)/i.test(line)) {
+      if (items.length > 0 && /entregue|devolvida|enviado/i.test(line)) {
         items[items.length - 1].turnedIn = true;
       } else {
         currentTurnedIn = true;
       }
       continue;
     }
-    if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso)/i.test(line)) {
-      if (items.length > 0 && /com atraso|pendente/i.test(line)) {
+    if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso|atrasad[oa]|n[ãa]o enviado)/i.test(line)) {
+      if (items.length > 0 && /com atraso|atrasad[oa]|pendente/i.test(line)) {
         items[items.length - 1].urgent = true;
       } else {
         currentTurnedIn = false;
@@ -969,7 +1014,42 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
       continue;
     }
 
-    // A short line naming one of the user's subjects is a class header (or the class of the previous card).
+    // 1. Explicit subject label ("Disciplina: Anatomia Humana", "Curso: ...")
+    const explicitSubject = line.match(EXPLICIT_SUBJECT_REGEX);
+    if (explicitSubject) {
+      const sub = registerSubject(explicitSubject[1]);
+      if (sub) currentSubject = sub;
+      continue;
+    }
+
+    // 2. Blackboard / Portal line combining course code + subject name ("20262_BIO_101 - Anatomia Humana")
+    const codeAndSubject = line.match(CODE_AND_SUBJECT_REGEX);
+    if (codeAndSubject && !parsePortugueseDate(codeAndSubject[1])) {
+      const code = codeAndSubject[1].trim();
+      const subName = codeAndSubject[2].trim();
+      const sub = registerSubject(subName, code);
+      if (sub) currentSubject = sub;
+      continue;
+    }
+
+    // 3. Standalone Blackboard course code ("20262_GRAD_BIO_101") followed by subject name on next line
+    if (STANDALONE_COURSE_CODE_REGEX.test(line)) {
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        if (
+          !NOISE_LINE_REGEX.test(nextLine) &&
+          !DATE_ONLY_LABEL_REGEX.test(nextLine) &&
+          !isCodeSnippetLine(nextLine)
+        ) {
+          const sub = registerSubject(nextLine, line);
+          if (sub) currentSubject = sub;
+          i++;
+        }
+      }
+      continue;
+    }
+
+    // 4. A short line naming one of the user's existing subjects is a class header (or the class of the previous card).
     const matchedSub = existingSubjects.find(
       (s) =>
         line.toLowerCase().includes(s.name.toLowerCase()) ||
@@ -978,10 +1058,12 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
     if (matchedSub && line.length <= matchedSub.name.length + 20) {
       if (items.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
         const last = items[items.length - 1];
-        last.courseName = matchedSub.name;
-        last.courseCode = matchedSub.code;
+        if (!last.courseName) {
+          last.courseName = matchedSub.name;
+          last.courseCode = matchedSub.code;
+        }
       }
-      currentSubject = matchedSub;
+      currentSubject = { name: matchedSub.name, code: matchedSub.code };
       continue;
     }
 
@@ -989,25 +1071,39 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
       continue;
     }
 
-    // A date on its own belongs to the previous card.
+    // 5. A date-only line ("Entrega: 25/11/2026 23:59", "Prazo: 30/11/2026", "15 de nov.")
     const onlyDate = parsePortugueseDate(line);
-    if (onlyDate && line.length < 32 && items.length > 0) {
-      items[items.length - 1].dueDate = onlyDate;
+    const isDateOnlyLine = !!onlyDate && (DATE_ONLY_LABEL_REGEX.test(line) || line.length < 32);
+    if (isDateOnlyLine) {
+      if (items.length > 0 && !items[items.length - 1].dueDate) {
+        items[items.length - 1].dueDate = onlyDate;
+      } else {
+        // Blackboard calendar often puts the date header BEFORE the activity card
+        pendingDueDate = onlyDate;
+      }
       continue;
     }
 
-    let dueDate: string | null = onlyDate;
-    if (i + 1 < lines.length) {
-      const nextDate = parsePortugueseDate(lines[i + 1]);
-      if (nextDate && lines[i + 1].length < 32) {
+    let dueDate: string | null = onlyDate || pendingDueDate;
+    pendingDueDate = null;
+
+    if (!dueDate && i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      const nextDate = parsePortugueseDate(nextLine);
+      if (nextDate && (DATE_ONLY_LABEL_REGEX.test(nextLine) || nextLine.length < 32)) {
         dueDate = nextDate;
         i++;
       }
     }
 
     const cleanTitle = line
-      .replace(/data de entrega:?\s*/i, '')
-      .replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, '')
+      .replace(/(?:data de entrega|entrega|prazo|vence em|vencimento)\s*[:\-–]?\s*/gi, '')
+      .replace(/\b20\d{2}-\d{2}-\d{2}\b/, '')
+      .replace(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/, '')
+      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/, '')
+      .replace(/\s*[-–—•|]\s*$/, '')
+      .replace(/^\s*[-–—•|]\s*/, '')
+      .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 110);
 
@@ -1022,11 +1118,11 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
     });
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && discoveredSubjects.size === 0) {
     throw new Error(
-      'Nenhuma atividade pôde ser identificada no texto colado. Copie a lista de atividades da aba "Atividades" ou "Pendentes" do Google Classroom (Ctrl+A e Ctrl+C) ou use o Conector Apps Script.'
+      'Nenhuma disciplina ou atividade pôde ser identificada no texto colado. Copie a página de Disciplinas ou Calendário/Atividades do seu AVA (Blackboard, Portal do Aluno, Google Classroom, Canvas ou Moodle) com Ctrl+A e Ctrl+C.'
     );
   }
 
-  return buildResultFromPastedItems(items);
+  return buildResultFromPastedItems(items, [...discoveredSubjects.values()]);
 }
