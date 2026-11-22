@@ -277,7 +277,7 @@ export const UpcomingTasksSection: React.FC = () => {
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-[11px] font-semibold text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-[#34A853]" />
-                <span>Google Classroom • OAuth 2.0</span>
+                <span>Sincronização de Portal</span>
               </div>
               <h3 className="text-base font-bold text-white pt-1">
                 {syncStepMessage}

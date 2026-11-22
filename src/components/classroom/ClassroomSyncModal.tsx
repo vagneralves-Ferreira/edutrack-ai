@@ -92,7 +92,7 @@ export const ClassroomSyncModal: React.FC = () => {
   latestRef.current = { subjects, tasks, ignoredCourses, apply: applyClassroomSyncResult, ready: isPlannerReady };
   const ignoredCourseNames = [...new Set(ignoredCourses.map((c) => c.courseName))];
 
-  const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('google_api');
+  const [activeMode, setActiveMode] = useState<'apps_script' | 'paste_import' | 'google_api'>('paste_import');
   const [googleReady, setGoogleReady] = useState<boolean>(() => isGoogleIdentityLoaded());
   const [googleLoadError, setGoogleLoadError] = useState<string | null>(null);
   const googleClientId = getGoogleClientId();
@@ -207,7 +207,7 @@ export const ClassroomSyncModal: React.FC = () => {
   /** Writes the result; throws are shown in the modal. */
   const runApply = async (result: ClassroomSyncResult, chosen: Record<string, CourseResolution>) => {
     setIsLoading(true);
-    setStepStatus('Salvando atividades no Supabase (sem duplicar)...');
+    setStepStatus('Salvando disciplinas e atividades na sua conta...');
     try {
       const summary = await latestRef.current.apply(result, chosen);
       setPendingResult(null);
@@ -420,7 +420,7 @@ export const ClassroomSyncModal: React.FC = () => {
       signal: controller.signal,
       onPopupMaybeClosed: () =>
         setStepStatus(
-          'Aguardando autorização no Google... Se a janela ainda estiver aberta (por exemplo em "O Google não verificou este app"), continue por lá. Se você a fechou, clique em Cancelar.'
+          'Aguardando autorização na janela do Google... Conclua o acesso por lá ou clique em Cancelar se fechou a janela.'
         ),
     });
 
@@ -484,20 +484,11 @@ export const ClassroomSyncModal: React.FC = () => {
               <BookMarked className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-                  Central de Importação & AVA
-                </h3>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-[10px] font-bold text-slate-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#4285F4]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#FBBC05]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#EA4335]" />
-                  <span className="ml-0.5">Multi-AVA</span>
-                </span>
-              </div>
+              <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
+                Importar Grade e Atividades
+              </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Importe disciplinas, atividades e entregas do Google Classroom, Blackboard, Canvas, Moodle ou Portal do Aluno
+                Traga suas disciplinas e prazos do portal da sua faculdade em segundos.
               </p>
             </div>
           </div>
@@ -527,34 +518,36 @@ export const ClassroomSyncModal: React.FC = () => {
         )}
 
         {/* Mode Selector Tabs */}
-        <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2 border-b border-white/[0.06]" role="tablist">
+        <div className="px-6 pt-4 pb-2 flex items-center gap-2 border-b border-white/[0.06]" role="tablist">
           {(
             [
-              { mode: 'google_api', label: '1. Google Classroom (OAuth)', Icon: KeyRound },
-              { mode: 'paste_import', label: '2. Colar do Portal / Blackboard (Ctrl+V)', Icon: FileJson },
-              { mode: 'apps_script', label: '3. Apps Script (contas pessoais)', Icon: Link2 },
+              { mode: 'paste_import', label: 'Importar do Portal', Icon: FileJson },
+              { mode: 'google_api', label: 'Google Classroom', Icon: KeyRound },
             ] as const
-          ).map(({ mode, label, Icon }) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={activeMode === mode}
-              onClick={() => {
-                setActiveMode(mode);
-                setErrorMsg(null);
-                setWarnMsg(null);
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeMode === mode
-                  ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-md shadow-emerald-600/25'
-                  : 'bg-white/[0.04] text-slate-400 hover:text-white'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{label}</span>
-            </button>
-          ))}
+          ).map(({ mode, label, Icon }) => {
+            const isTabActive = activeMode === mode || (mode === 'google_api' && activeMode === 'apps_script');
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={isTabActive}
+                onClick={() => {
+                  setActiveMode(mode);
+                  setErrorMsg(null);
+                  setWarnMsg(null);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  isTabActive
+                    ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-md shadow-emerald-600/25'
+                    : 'bg-white/[0.04] text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Body */}
@@ -676,21 +669,34 @@ export const ClassroomSyncModal: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
-                    Conector Real da Sua Conta Google Classroom (Sem Client ID)
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMode('google_api');
+                        setErrorMsg(null);
+                        setWarnMsg(null);
+                      }}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      ← Voltar
+                    </button>
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
+                      Importação alternativa para Google Classroom
+                    </h4>
+                  </div>
                   <a
                     href="https://script.google.com/home/start"
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 hover:text-cyan-200"
                   >
-                    <span>Abrir Google Apps Script</span>
+                    <span>Abrir conector Google</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Por segurança do Google, nenhum site externo enxerga sua conta particular automaticamente. Com este conector oficial do Google (feito em 1 minuto na sua conta), você puxa <strong>todas as turmas, os professores reais (ex: Prof. Evandro) e todas as 15+ entregas de cada matéria</strong> direto do Classroom:
+                  Use esta opção caso sua conta pessoal ou institucional restrinja a conexão direta. Com este conector rápido, você importa <strong>suas turmas, professores e entregas</strong> diretamente da sua conta:
                 </p>
                 <ol className="text-[11px] text-slate-300 space-y-1.5 list-decimal list-inside">
                   <li>
@@ -794,31 +800,28 @@ export const ClassroomSyncModal: React.FC = () => {
 
           {!pendingResult && activeMode === 'google_api' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3" data-testid="google-signin-panel">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-cyan-400">
-                  Conexão oficial com o Google Classroom
-                </h4>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Entre com a conta do Google em que você usa o Classroom (por exemplo, a da faculdade). O EduTrack pede
-                  <strong> só permissões de leitura</strong>:
-                </p>
-                <ul className="text-[11px] text-slate-300 space-y-0.5 list-disc list-inside">
-                  <li>suas turmas e os nomes dos professores;</li>
-                  <li>atividades e as suas entregas;</li>
-                  <li>materiais e avisos do mural.</li>
+              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-4" data-testid="google-signin-panel">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white">
+                    Conecte sua conta do Google Classroom
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Sincronize sua rotina acadêmica com permissão somente de leitura, sem salvar sua senha.
+                  </p>
+                </div>
+
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                  <li>Importação automática de turmas e professores</li>
+                  <li>Atividades e datas de entrega sempre atualizadas</li>
+                  <li>Materiais de aula e avisos reunidos em um só lugar</li>
                 </ul>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  O acesso é usado apenas durante a importação e cancelado logo em seguida: nada fica salvo no navegador
-                  nem no banco. Enquanto o app estiver em modo de teste no Google, pode aparecer "O Google não verificou
-                  este app": clique em <em>Avançado</em> → <em>Acessar EduTrack AI</em>.
-                </p>
 
                 {!googleClientId && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
-                    O login com Google ainda não foi configurado neste ambiente (falta <code>VITE_GOOGLE_CLIENT_ID</code>).
-                    Enquanto isso, use "Colar do Portal / Blackboard (Ctrl+V)".
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                    A conexão direta com o Google não está ativa neste ambiente. Use a aba <strong>Importar do Portal</strong> para importar suas disciplinas e prazos.
                   </div>
                 )}
+
                 <button
                   type="button"
                   disabled={isLoading || !googleClientId}
@@ -831,51 +834,60 @@ export const ClassroomSyncModal: React.FC = () => {
                     <path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z" />
                     <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z" />
                   </svg>
-                  <span>{isLoading ? 'Importando do Google Classroom...' : 'Entrar com Google'}</span>
+                  <span>{isLoading ? 'Conectando ao Google Classroom...' : 'Conectar com Google'}</span>
                 </button>
-                <p className="text-[11px] text-slate-400 text-center">
-                  Você vai para a página do Google e volta para cá automaticamente.
-                </p>
 
-                {googleClientId && (
-                  <div className="pt-1 text-center">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/[0.06] text-[11px] text-slate-400">
+                  {googleClientId ? (
                     <button
                       type="button"
                       disabled={isLoading || !googleReady}
                       onClick={handleGooglePopup}
-                      className="text-[11px] font-semibold text-cyan-400 hover:underline underline-offset-4 disabled:opacity-60 disabled:no-underline cursor-pointer"
+                      className="font-medium text-slate-400 hover:text-cyan-300 transition-colors disabled:opacity-50 cursor-pointer"
                     >
-                      {googleReady ? 'Alternativa: entrar em uma janela pop-up' : googleLoadError ? 'Pop-up indisponível' : 'Carregando opção de pop-up...'}
+                      {googleReady ? 'Abrir em janela pop-up' : googleLoadError ? 'Pop-up indisponível' : 'Preparando pop-up...'}
                     </button>
-                    {googleLoadError && <p className="mt-1 text-[11px] text-rose-300">{googleLoadError}</p>}
-                  </div>
-                )}
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMode('apps_script');
+                      setErrorMsg(null);
+                      setWarnMsg(null);
+                    }}
+                    className="font-medium text-slate-400 hover:text-slate-200 underline underline-offset-4 transition-colors cursor-pointer"
+                  >
+                    Usar importação alternativa
+                  </button>
+                </div>
+                {googleLoadError && <p className="text-[11px] text-rose-300">{googleLoadError}</p>}
               </div>
             </div>
           )}
 
           {!pendingResult && activeMode === 'paste_import' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-bold text-slate-200">
-                    Modo Rápido (10 segundos): Copie sua página do Blackboard, Portal do Aluno, Classroom, Canvas ou Moodle
+                    Compatível com Blackboard, Canvas, Moodle, Portal do Aluno e Classroom
                   </label>
-                  <label className="px-3 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 text-[11px] font-bold text-violet-300 cursor-pointer">
-                    Carregar Arquivo .JSON
+                  <label className="px-3 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-[11px] font-semibold text-slate-300 cursor-pointer transition-colors">
+                    Importar arquivo
                     <input type="file" accept=".json,.txt" onChange={handleFileUpload} className="hidden" />
                   </label>
                 </div>
-                <ol className="text-[11px] text-slate-300 space-y-1 list-decimal list-inside bg-black/25 rounded-xl p-3 border border-white/[0.05]">
-                  <li>Abra a página de <strong>Disciplinas / Cursos</strong> ou <strong>Calendário / Atividades</strong> no seu AVA (Blackboard, Área do Aluno UNICID / Cruzeiro do Sul, Google Classroom, Canvas ou Moodle).</li>
-                  <li>Pressione <strong>Ctrl + A</strong> (selecionar tudo) e depois <strong>Ctrl + C</strong> (copiar).</li>
-                  <li>Clique na caixa abaixo, pressione <strong>Ctrl + V</strong> e clique em <strong>Processar e Abastecer</strong>.</li>
+                <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside bg-black/25 rounded-xl p-3.5 border border-white/[0.05]">
+                  <li>Abra a página de <strong>disciplinas ou prazos</strong> no portal da sua faculdade e copie o texto da tela.</li>
+                  <li>Cole o conteúdo no campo abaixo e clique em <strong>Importar Grade e Atividades</strong>.</li>
                 </ol>
                 <textarea
                   rows={5}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Abra seu Blackboard, Portal do Aluno, Classroom, Canvas ou Moodle -> copie a tela de Disciplinas ou Calendário (Ctrl+A, Ctrl+C) e cole (Ctrl+V) aqui..."
+                  placeholder="Cole aqui a lista de disciplinas ou prazos copiada do portal da sua faculdade..."
                   className="w-full bg-black/40 border border-white/[0.1] rounded-xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                 />
                 <button
@@ -885,7 +897,7 @@ export const ClassroomSyncModal: React.FC = () => {
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <Layers className="w-4 h-4" />
-                  <span>Processar e Abastecer EduTrack AI</span>
+                  <span>Importar Grade e Atividades</span>
                 </button>
               </div>
             </div>

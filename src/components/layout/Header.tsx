@@ -236,10 +236,10 @@ export const Header: React.FC = () => {
           <button
             onClick={() => setIsClassroomModalOpen(true)}
             className="hidden md:flex items-center gap-1.5 px-2.5 2xl:px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer shrink-0"
-            title="Central de Importação & AVA (Blackboard, Classroom, Canvas, Moodle)"
+            title="Importar Grade e Atividades"
           >
             <BookMarked className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden 2xl:inline">Importar AVA</span>
+            <span className="hidden 2xl:inline">Importar</span>
           </button>
 
           {/* Quick New Task Button */}
