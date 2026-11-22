@@ -165,7 +165,7 @@ export const TasksView: React.FC = () => {
             <span className="flex items-center justify-center w-4 h-4 rounded bg-emerald-500/20 text-emerald-400">
               <BookMarked className="w-3.5 h-3.5" />
             </span>
-            <span>Importar do Portal</span>
+            <span>Importar Grade</span>
             <span className="flex items-center gap-0.5 ml-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4285F4]" />
               <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
@@ -280,7 +280,7 @@ export const TasksView: React.FC = () => {
       {tasks.length === 0 ? (
         <EmptyPlannerState
           title="Nenhuma tarefa cadastrada"
-          description="Você ainda não tem tarefas cadastradas. Adicione uma disciplina ou importe suas entregas direto do portal da sua faculdade (Blackboard, Classroom, Canvas, Moodle)."
+          description="Envie o PDF da sua grade ou um print do calendário do portal da sua faculdade (Blackboard, Canvas, Moodle, etc.) para importar suas entregas automaticamente."
         />
       ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
