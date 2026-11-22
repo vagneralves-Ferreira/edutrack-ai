@@ -1,9 +1,21 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  buildExtractDocumentGeminiBody,
+  parseExtractDocumentResponse,
+  validateDocumentRequest,
+} from "./extractDocument.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+}
 
 const FALLBACK_DICAS: Record<string, string[]> = {
   "Visão Geral": [
@@ -43,6 +55,8 @@ Deno.serve(async (req) => {
   let mode = "tip";
   let rawPortalText = "";
   let portalName = "Portal Acadêmico";
+  let fileBase64: unknown = undefined;
+  let mimeType: unknown = undefined;
 
   try {
     const body = await req.json();
@@ -51,6 +65,8 @@ Deno.serve(async (req) => {
     if (body?.mode) mode = String(body.mode);
     if (body?.text) rawPortalText = String(body.text).slice(0, 8000);
     if (body?.portalName) portalName = String(body.portalName).slice(0, 80);
+    if (body?.fileBase64 !== undefined) fileBase64 = body.fileBase64;
+    if (body?.mimeType !== undefined) mimeType = body.mimeType;
   } catch {
     // Mantém valores padrão
   }
@@ -65,13 +81,86 @@ Deno.serve(async (req) => {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Sessao invalida. Faca login." }), {
-        status: 401, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Sessão inválida ou expirada. Faça login novamente." }, 401);
     }
 
     const chave = Deno.env.get("GEMINI_API_KEY") ?? "";
     const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+    if (mode === "extract_document") {
+      const validation = validateDocumentRequest({ fileBase64, mimeType });
+      if (!validation.ok) {
+        return jsonResponse({ error: validation.error }, validation.status);
+      }
+
+      if (!chave) {
+        return jsonResponse(
+          {
+            error:
+              "O serviço de análise inteligente está temporariamente indisponível. Tente novamente em alguns instantes.",
+          },
+          503
+        );
+      }
+
+      for (const model of models) {
+        try {
+          const geminiBody = buildExtractDocumentGeminiBody({
+            fileBase64: validation.fileBase64,
+            mimeType: validation.mimeType,
+            model,
+          });
+
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-goog-api-key": chave },
+              body: JSON.stringify(geminiBody),
+              signal: AbortSignal.timeout(25000),
+            }
+          );
+
+          if (!geminiRes.ok) {
+            console.error(`Gemini extract_document HTTP ${geminiRes.status} em ${model}`);
+            continue;
+          }
+
+          const data = await geminiRes.json();
+          const parts = data?.candidates?.[0]?.content?.parts ?? [];
+          const textPart = parts.find(
+            (p: { text?: string }) => typeof p?.text === "string" && p.text.trim().length > 0
+          );
+
+          if (!textPart?.text) {
+            continue;
+          }
+
+          const parsed = parseExtractDocumentResponse(textPart.text);
+          if (parsed.ok) {
+            return jsonResponse({
+              subjects: parsed.data.subjects,
+              tasks: parsed.data.tasks,
+              source: model,
+            });
+          }
+
+          if (parsed.reason === "no_academic_data") {
+            return jsonResponse({ error: parsed.error }, 422);
+          }
+        } catch (innerErr) {
+          console.error(`Falha na extração de documento via ${model}:`, innerErr);
+        }
+      }
+
+      return jsonResponse(
+        {
+          error:
+            "Não foi possível analisar este arquivo agora. Tente novamente em alguns instantes ou envie uma captura mais nítida da sua grade.",
+        },
+        503
+      );
+    }
 
     if (mode === "extract_portal") {
       if (!rawPortalText.trim()) {
@@ -199,9 +288,12 @@ Responda apenas com o texto da dica, sem titulos nem markdown.`;
     );
   } catch (err) {
     console.error("Falha geral:", err);
-    return new Response(
-      JSON.stringify({ dica: escolherDicaFallback(tela, contexto), source: "fallback" }),
-      { headers: { ...CORS, "Content-Type": "application/json" } }
-    );
+    if (mode === "extract_document") {
+      return jsonResponse(
+        { error: "Ocorreu um erro ao analisar o arquivo enviado. Tente novamente em instantes." },
+        500
+      );
+    }
+    return jsonResponse({ dica: escolherDicaFallback(tela, contexto), source: "fallback" });
   }
 });

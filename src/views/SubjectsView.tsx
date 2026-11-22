@@ -184,7 +184,7 @@ export const SubjectsView: React.FC = () => {
             className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer shrink-0"
           >
             <BookMarked className="w-4 h-4 text-emerald-400" />
-            <span>Importar do Portal</span>
+            <span>Importar Grade</span>
           </button>
 
           <button
@@ -231,7 +231,7 @@ export const SubjectsView: React.FC = () => {
       {subjects.length === 0 ? (
         <EmptyPlannerState
           title="Nenhuma disciplina cadastrada"
-          description="Sua grade ainda está vazia. Adicione sua primeira disciplina ou importe direto do portal da sua faculdade (Blackboard, Classroom, Canvas, Moodle)."
+          description="Envie o PDF do comprovante de matrícula ou um print do portal da sua faculdade (Blackboard, Canvas, Moodle, etc.) para montar sua grade automaticamente."
           onAddSubject={() => setIsModalOpen(true)}
         />
       ) : (

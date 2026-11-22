@@ -66,8 +66,8 @@ export const DashboardView: React.FC = () => {
 
         {subjects.length === 0 ? (
           <EmptyPlannerState
-            title="Nenhuma disciplina cadastrada"
-            description="Comece adicionando sua primeira disciplina ou importando sua grade do portal da sua faculdade (Blackboard, Classroom, Canvas, Moodle)."
+            title="Comece importando sua grade"
+            description="Envie o PDF do comprovante de matrícula ou um print do portal da sua faculdade (Blackboard, Canvas, Moodle, etc.) para organizar suas disciplinas e prazos em segundos."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
