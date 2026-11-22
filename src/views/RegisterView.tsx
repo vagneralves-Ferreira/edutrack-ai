@@ -279,9 +279,9 @@ export const RegisterView: React.FC = () => {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 border border-white/[0.09] text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
                   >
-                    <optgroup label="Graduação / Tecnólogo" className="bg-[#0d0e17] text-slate-300">
+                    <optgroup label="Graduação / Tecnólogo">
                       <option value="1º Semestre">1º Semestre (Calouro)</option>
                       <option value="2º Semestre">2º Semestre</option>
                       <option value="3º Semestre">3º Semestre</option>
@@ -295,7 +295,7 @@ export const RegisterView: React.FC = () => {
                       <option value="11º Semestre">11º Semestre</option>
                       <option value="12º Semestre">12º Semestre (Formando)</option>
                     </optgroup>
-                    <optgroup label="Pós-Graduação, Técnico e Extensão" className="bg-[#0d0e17] text-slate-300">
+                    <optgroup label="Pós-Graduação, Técnico e Extensão">
                       <option value="Pós-Graduação / MBA (Lato Sensu)">Pós-Graduação / MBA (Lato Sensu)</option>
                       <option value="Mestrado (Stricto Sensu)">Mestrado (Stricto Sensu)</option>
                       <option value="Doutorado (Stricto Sensu)">Doutorado (Stricto Sensu)</option>
