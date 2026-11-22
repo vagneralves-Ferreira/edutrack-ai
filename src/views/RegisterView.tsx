@@ -75,7 +75,7 @@ export const RegisterView: React.FC = () => {
 
     const result: any = await register(email.trim(), password, {
       name: name.trim(),
-      institution: institution.trim() || 'Minha Faculdade',
+      institution: institution.trim() || undefined,
       course: course.trim() || 'Graduação',
       semester,
     });
@@ -246,7 +246,7 @@ export const RegisterView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Curso de Graduação
+                  Curso / Formação
                 </label>
                 <div className="relative rounded-xl">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -281,14 +281,27 @@ export const RegisterView: React.FC = () => {
                     onChange={(e) => setSemester(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer font-mono transition-all"
                   >
-                    <option value="1º Semestre">1º Semestre (Calouro)</option>
-                    <option value="2º Semestre">2º Semestre</option>
-                    <option value="3º Semestre">3º Semestre</option>
-                    <option value="4º Semestre">4º Semestre</option>
-                    <option value="5º Semestre">5º Semestre</option>
-                    <option value="6º Semestre">6º Semestre</option>
-                    <option value="7º Semestre">7º Semestre</option>
-                    <option value="8º Semestre">8º Semestre (Formando)</option>
+                    <optgroup label="Graduação / Tecnólogo" className="bg-[#0d0e17] text-slate-300">
+                      <option value="1º Semestre">1º Semestre (Calouro)</option>
+                      <option value="2º Semestre">2º Semestre</option>
+                      <option value="3º Semestre">3º Semestre</option>
+                      <option value="4º Semestre">4º Semestre</option>
+                      <option value="5º Semestre">5º Semestre</option>
+                      <option value="6º Semestre">6º Semestre</option>
+                      <option value="7º Semestre">7º Semestre</option>
+                      <option value="8º Semestre">8º Semestre</option>
+                      <option value="9º Semestre">9º Semestre</option>
+                      <option value="10º Semestre">10º Semestre</option>
+                      <option value="11º Semestre">11º Semestre</option>
+                      <option value="12º Semestre">12º Semestre (Formando)</option>
+                    </optgroup>
+                    <optgroup label="Pós-Graduação, Técnico e Extensão" className="bg-[#0d0e17] text-slate-300">
+                      <option value="Pós-Graduação / MBA (Lato Sensu)">Pós-Graduação / MBA (Lato Sensu)</option>
+                      <option value="Mestrado (Stricto Sensu)">Mestrado (Stricto Sensu)</option>
+                      <option value="Doutorado (Stricto Sensu)">Doutorado (Stricto Sensu)</option>
+                      <option value="Curso Técnico / Profissionalizante">Curso Técnico / Profissionalizante</option>
+                      <option value="Curso Livre / Extensão">Curso Livre / Extensão</option>
+                    </optgroup>
                   </select>
                 </div>
               </div>

@@ -187,7 +187,10 @@ export const Header: React.FC = () => {
                   AI 2.0
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium hidden 2xl:block truncate max-w-[150px]">
+              <p
+                className="text-[10px] text-slate-400 font-medium hidden 2xl:block truncate max-w-[220px]"
+                title={formatHeaderInstitutionLabel(isAuthenticated, currentUser?.institution, currentUser?.semester)}
+              >
                 {formatHeaderInstitutionLabel(isAuthenticated, currentUser?.institution, currentUser?.semester)}
               </p>
             </div>
