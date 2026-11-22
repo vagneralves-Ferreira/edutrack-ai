@@ -392,3 +392,15 @@ html.light .border-white\/\[0\.12\] {
   animation: screenSlideOutToRight 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   will-change: transform, opacity;
 }
+
+select option,
+select optgroup {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.dark select option,
+.dark select optgroup {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
