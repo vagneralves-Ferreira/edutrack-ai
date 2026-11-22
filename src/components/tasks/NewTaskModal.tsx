@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, Check, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../../context/PlannerContext';
 import type { Priority, TaskType } from '../../types';
@@ -89,7 +90,7 @@ export const NewTaskModal: React.FC = () => {
     handleClose();
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
       onClick={(e) => {
@@ -296,6 +297,7 @@ export const NewTaskModal: React.FC = () => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

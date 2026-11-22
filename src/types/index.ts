@@ -9,11 +9,15 @@ export interface Evaluation {
   weight: number; // percentage
   status: 'pending' | 'completed';
   grade?: number;
+  url?: string;
+  attachments?: MaterialAttachment[];
 }
 
 export interface MaterialAttachment {
   title: string;
   url: string;
+  alternateLink?: string;
+  driveFileId?: string;
   type: 'drive' | 'youtube' | 'link' | 'form' | 'classroom';
 }
 
@@ -25,6 +29,7 @@ export interface StudyMaterial {
   description: string;
   badge: string;
   url?: string;
+  classroomId?: string;
   attachments?: MaterialAttachment[];
 }
 
@@ -74,6 +79,7 @@ export interface Task {
   importedFromClassroom?: boolean;
   /** Stable Google Classroom key (tasks.classroom_id); undefined for manual tasks. */
   classroomId?: string;
+  attachments?: MaterialAttachment[];
 }
 
 export interface StudySession {

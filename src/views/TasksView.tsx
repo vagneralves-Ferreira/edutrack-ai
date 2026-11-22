@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { usePlanner } from '../context/PlannerContext';
 import type { TaskStatus } from '../types';
@@ -564,7 +565,7 @@ export const TasksView: React.FC = () => {
       )}
 
       {/* High-Fidelity Google Classroom OAuth / Sync Modal */}
-      {isSyncingClassroom && (
+      {isSyncingClassroom && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md rounded-2xl bento-card p-7 shadow-2xl text-center space-y-5">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shadow-inner">
@@ -588,7 +589,8 @@ export const TasksView: React.FC = () => {
               <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#4285F4] via-[#34A853] to-[#FBBC05] animate-pulse" />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

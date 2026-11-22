@@ -186,6 +186,124 @@ function inferTaskType(title: string, description = ''): { type: TaskType; isCri
 }
 
 /**
+ * Normaliza e valida URLs externas (apenas http/https), descartando links vazios ou inseguros.
+ */
+export function sanitizeExternalUrl(raw?: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Extrai e deduplica anexos do Google Classroom (`driveFile`, `youtubeVideo`, `link`, `form`)
+ * com fallback de URL do Google Drive por `driveFileId` e link opcional da postagem original.
+ */
+export function extractAttachments(rawList: any[] | undefined, postUrl?: string) {
+  const fileAttachments: MaterialAttachment[] = [];
+  const seenUrls = new Set<string>();
+  let detectedFormat = 'Material Classroom';
+
+  const pushUnique = (attachment: MaterialAttachment, formatLabel: string) => {
+    const key = attachment.url.toLowerCase();
+    if (seenUrls.has(key)) return;
+    seenUrls.add(key);
+    fileAttachments.push(attachment);
+    if (detectedFormat === 'Material Classroom') detectedFormat = formatLabel;
+  };
+
+  for (const item of Array.isArray(rawList) ? rawList : []) {
+    if (!item || typeof item !== 'object') continue;
+
+    const df = item?.driveFile?.driveFile ?? (item?.driveFile?.id || item?.driveFile?.alternateLink ? item.driveFile : undefined);
+    const driveFileId = df?.id ? String(df.id).trim() || undefined : undefined;
+    const driveAlt = sanitizeExternalUrl(df?.alternateLink);
+    const driveFallback = driveFileId ? `https://drive.google.com/file/d/${encodeURIComponent(driveFileId)}/view` : undefined;
+    const driveUrl = driveAlt || driveFallback;
+    if (driveUrl) {
+      pushUnique(
+        {
+          title: String(df?.title || 'Arquivo no Google Drive').trim() || 'Arquivo no Google Drive',
+          url: driveUrl,
+          alternateLink: driveAlt || driveUrl,
+          driveFileId,
+          type: 'drive',
+        },
+        'Google Drive / PDF'
+      );
+    }
+
+    const yt = item?.youtubeVideo;
+    const ytUrl = sanitizeExternalUrl(yt?.alternateLink);
+    if (ytUrl) {
+      pushUnique(
+        {
+          title: String(yt?.title || 'Vídeo no YouTube').trim() || 'Vídeo no YouTube',
+          url: ytUrl,
+          alternateLink: ytUrl,
+          type: 'youtube',
+        },
+        'Vídeo YouTube'
+      );
+    }
+
+    const lk = item?.link;
+    const lkUrl = sanitizeExternalUrl(lk?.url);
+    if (lkUrl) {
+      pushUnique(
+        {
+          title: String(lk?.title || lkUrl).trim() || lkUrl,
+          url: lkUrl,
+          alternateLink: lkUrl,
+          type: 'link',
+        },
+        'Link Externo'
+      );
+    }
+
+    const fm = item?.form;
+    const fmUrl = sanitizeExternalUrl(fm?.formUrl);
+    if (fmUrl) {
+      pushUnique(
+        {
+          title: String(fm?.title || 'Formulário Google').trim() || 'Formulário Google',
+          url: fmUrl,
+          alternateLink: fmUrl,
+          type: 'form',
+        },
+        'Formulário Google'
+      );
+    }
+  }
+
+  const attachments: MaterialAttachment[] = [...fileAttachments];
+  const safePostUrl = sanitizeExternalUrl(postUrl);
+  if (safePostUrl && !seenUrls.has(safePostUrl.toLowerCase())) {
+    attachments.push({
+      title: 'Abrir postagem original no Google Classroom',
+      url: safePostUrl,
+      alternateLink: safePostUrl,
+      type: 'classroom',
+    });
+  }
+
+  return {
+    url: attachments[0]?.url || safePostUrl,
+    fileAttachments,
+    attachments,
+    format: detectedFormat,
+  };
+}
+
+/**
  * Constrói o resultado completo do EduTrack AI a partir de pacotes reais da API do Google Classroom
  * (usado tanto pela API REST OAuth quanto pelo Conector Google Apps Script).
  */
@@ -241,6 +359,7 @@ export function buildSyncResultFromCourseBundles(
 
     const courseWorkList: any[] = Array.isArray(bundle.courseWork) ? bundle.courseWork : [];
     const evaluations: Evaluation[] = [];
+    const materials: StudyMaterial[] = [];
     let completedWorkCount = 0;
 
     for (const work of courseWorkList) {
@@ -257,10 +376,12 @@ export function buildSyncResultFromCourseBundles(
       const { dueDate, dueTime } = resolveClassroomDue(work);
 
       const inferred = inferTaskType(workTitle, workDesc);
+      const extractedWork = extractAttachments(work.materials, work.alternateLink);
+      const workClassroomId = `gc:${courseId}:${workId}`;
 
       syncedTasks.push({
         id: `classroom-${courseId}-${workId}`,
-        classroomId: `gc:${courseId}:${workId}`,
+        classroomId: workClassroomId,
         turnedIn,
         title: workTitle,
         subjectId,
@@ -273,7 +394,23 @@ export function buildSyncResultFromCourseBundles(
         isCriticalMvp: inferred.isCriticalMvp,
         description: work.alternateLink ? `${workDesc} • Link: ${work.alternateLink}` : workDesc,
         importedFromClassroom: true,
+        attachments: extractedWork.attachments,
       });
+
+      if (extractedWork.fileAttachments.length > 0) {
+        materials.push({
+          id: `cw-${courseId}-${workId}`,
+          classroomId: workClassroomId,
+          title: workTitle,
+          category: 'apostila',
+          format: extractedWork.format,
+          description: workDesc,
+          badge: 'Atividade Classroom',
+          url: extractedWork.url,
+          attachments: extractedWork.attachments,
+        });
+        totalMaterials++;
+      }
 
       if (work.maxPoints || inferred.type === 'avaliacao' || inferred.type === 'avaliacao_mvp' || inferred.type === 'projeto') {
         const assignedGrade =
@@ -291,69 +428,12 @@ export function buildSyncResultFromCourseBundles(
           weight: work.maxPoints ? Math.min(100, Number(work.maxPoints)) : 25,
           status: status === 'completed' ? 'completed' : 'pending',
           grade: assignedGrade,
+          url: extractedWork.url,
+          attachments: extractedWork.attachments,
         });
         totalEvaluations++;
       }
     }
-
-    const materials: StudyMaterial[] = [];
-    const extractAttachments = (rawList: any[] | undefined, postUrl?: string) => {
-      const attachments: MaterialAttachment[] = [];
-      let detectedFormat = 'Material Classroom';
-
-      for (const item of rawList || []) {
-        const df = item?.driveFile?.driveFile;
-        if (df?.alternateLink) {
-          attachments.push({
-            title: String(df.title || 'Arquivo no Google Drive'),
-            url: String(df.alternateLink),
-            type: 'drive',
-          });
-          if (detectedFormat === 'Material Classroom') detectedFormat = 'Google Drive / PDF';
-        }
-        const yt = item?.youtubeVideo;
-        if (yt?.alternateLink) {
-          attachments.push({
-            title: String(yt.title || 'Vídeo no YouTube'),
-            url: String(yt.alternateLink),
-            type: 'youtube',
-          });
-          if (detectedFormat === 'Material Classroom') detectedFormat = 'Vídeo YouTube';
-        }
-        const lk = item?.link;
-        if (lk?.url) {
-          attachments.push({
-            title: String(lk.title || lk.url),
-            url: String(lk.url),
-            type: 'link',
-          });
-          if (detectedFormat === 'Material Classroom') detectedFormat = 'Link Externo';
-        }
-        const fm = item?.form;
-        if (fm?.formUrl) {
-          attachments.push({
-            title: String(fm.title || 'Formulário Google'),
-            url: String(fm.formUrl),
-            type: 'form',
-          });
-          if (detectedFormat === 'Material Classroom') detectedFormat = 'Formulário Google';
-        }
-      }
-
-      if (postUrl && !attachments.some((a) => a.url === postUrl)) {
-        attachments.push({
-          title: 'Abrir postagem original no Google Classroom',
-          url: String(postUrl),
-          type: 'classroom',
-        });
-      }
-
-      return {
-        url: attachments[0]?.url || (postUrl ? String(postUrl) : undefined),
-        attachments,
-        format: detectedFormat,
-      };
-    };
 
     for (const mat of bundle.materials || []) {
       const extracted = extractAttachments(mat.materials, mat.alternateLink);

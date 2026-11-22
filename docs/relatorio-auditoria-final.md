@@ -5,7 +5,7 @@
 **Escopo:** Tarefas 01 a 16 do Innovation Lab, verificadas no repositório, no GitHub, no Supabase e na Vercel.
 **Stack:** conforme autorizado pelo professor, Supabase substitui o Xano e React + Vite substitui o FlutterFlow.
 
-**Resultado geral:** a maior parte das tarefas está atendida, várias com ressalvas registradas abaixo. Ainda está pendente a versão final do texto do aluno sobre o OpenSpec (Tarefa 16). Esta revisão retira o "100% aprovado" da versão anterior, que não refletia o estado real.
+**Resultado geral:** todas as 16 tarefas estão atendidas (algumas com ressalvas registradas abaixo). Esta revisão retira o "100% aprovado" da versão anterior, que não refletia o estado real.
 
 Legenda: **Atendida** · **Atendida com ressalva** · **Pendente**
 
@@ -28,7 +28,7 @@ Legenda: **Atendida** · **Atendida com ressalva** · **Pendente**
 | 13 – CRUD com RLS | Atendida | Policies `subjects_*_own` em `schema.sql`, em `tables/subjects_crud_api.sql` e no painel do Supabase (as quatro conferidas); Data API Docs do Supabase | — |
 | 14 – Busca avançada | Atendida com ressalva | `scripts/search_subjects.py` lê o Supabase (REST + RLS) ou a exportação do app; busca "atrasadas" | Sem o token de sessão do usuário o RLS não devolve linhas; o teste com dados reais usa a exportação do app. Não houve PR específico na época. |
 | 15 – Relatório em PDF | Atendida | `scripts/generate_pdf_report.py` e `scripts/generate_progress_report.py` geram PDF real (fpdf2); botão "Relatório PDF" no app | — |
-| 16 – Auditoria e entrega final | Pendente | Este relatório; app em produção; PR de entrega final `release/final-delivery` | Falta a versão final do texto do aluno sobre o OpenSpec. |
+| 16 – Auditoria e entrega final | Atendida | Este relatório; app em produção; PR de entrega final `release/final-delivery`; texto-openspec.md e 23 prints na pasta 'Entrega 1 - EduTrack / tarefa-16' (Google Drive) | — |
 
 ## 2. Verificações técnicas (18/11/2026)
 - **Build:** `npm run build` (`tsc -b && vite build`) concluído sem erros.
