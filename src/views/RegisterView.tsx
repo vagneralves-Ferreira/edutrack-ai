@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlanner } from '../context/PlannerContext';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import { BRAZILIAN_INSTITUTIONS, MEC_UNDERGRADUATE_COURSES } from '../data/academicCatalog';
 import { 
   Sparkles, 
   User, 
@@ -26,7 +27,7 @@ export const RegisterView: React.FC = () => {
   const [name, setName] = useState('');
   const [institution, setInstitution] = useState('');
   const [email, setEmail] = useState('');
-  const [course, setCourse] = useState('Análise e Desenvolvimento de Sistemas');
+  const [course, setCourse] = useState('');
   const [semester, setSemester] = useState('1º Semestre');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -208,18 +209,15 @@ export const RegisterView: React.FC = () => {
                   type="text"
                   required
                   list="institution-suggestions"
-                  placeholder="Ex: Faculdade Impacta, Cruzeiro do Sul, FIAP, USP..."
+                  placeholder="Ex: UNICID, Cruzeiro do Sul, USP, FIAP..."
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
                 <datalist id="institution-suggestions">
-                  <option value="Faculdade Impacta" />
-                  <option value="Cruzeiro do Sul" />
-                  <option value="FIAP" />
-                  <option value="Anhembi Morumbi" />
-                  <option value="UNINOVE" />
-                  <option value="USP" />
+                  {BRAZILIAN_INSTITUTIONS.map((inst) => (
+                    <option key={inst} value={inst} />
+                  ))}
                 </datalist>
               </div>
             </div>
@@ -254,18 +252,19 @@ export const RegisterView: React.FC = () => {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <GraduationCap className="w-4 h-4" />
                   </div>
-                  <select
+                  <input
+                    type="text"
+                    list="course-suggestions"
+                    placeholder="Ex: Biomedicina, Direito, Engenharia..."
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition-all"
-                  >
-                    <option value="Análise e Desenvolvimento de Sistemas">Análise e Desenvolvimento de Sistemas</option>
-                    <option value="Engenharia de Software">Engenharia de Software</option>
-                    <option value="Ciência da Computação">Ciência da Computação</option>
-                    <option value="Sistemas de Informação">Sistemas de Informação</option>
-                    <option value="Administração">Administração</option>
-                    <option value="Direito">Direito</option>
-                  </select>
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  />
+                  <datalist id="course-suggestions">
+                    {MEC_UNDERGRADUATE_COURSES.map((courseOption) => (
+                      <option key={courseOption} value={courseOption} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 
