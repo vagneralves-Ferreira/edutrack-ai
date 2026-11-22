@@ -53,7 +53,7 @@ export const GreetingBanner: React.FC = () => {
         <div className="space-y-2.5 max-w-md">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[11px] font-bold tracking-wide uppercase">
             <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{(currentUser?.institution || 'Minha Faculdade').toUpperCase()} • {currentUser?.semester || '2026.2'}</span>
+            <span>{(currentUser?.institution || 'Planner Acadêmico').toUpperCase()} • {currentUser?.semester || '2026.2'}</span>
           </div>
 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">

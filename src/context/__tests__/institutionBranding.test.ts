@@ -20,6 +20,8 @@ describe('White-label / Multi-instituição', () => {
     expect(formatHeaderInstitutionLabel(false, 'Faculdade Impacta', '2026.2')).toBe('Planner Acadêmico');
     expect(formatHeaderInstitutionLabel(false, undefined, undefined)).toBe('Planner Acadêmico');
     expect(formatHeaderInstitutionLabel(true, 'UNICID', '2026.2')).toBe('UNICID • 2026.2');
+    expect(formatHeaderInstitutionLabel(true, 'USP', 'Mestrado (Stricto Sensu)')).toBe('USP • Mestrado (Stricto Sensu)');
+    expect(formatHeaderInstitutionLabel(true, undefined, '12º Semestre')).toBe('Planner Acadêmico • 12º Semestre');
     expect(formatHeaderInstitutionLabel(true, undefined, '2026.2')).toBe('Planner Acadêmico • 2026.2');
   });
 });
