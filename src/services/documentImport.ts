@@ -16,8 +16,16 @@ export const ACCEPTED_DOCUMENT_MIME_TYPES = [
 
 export type AcceptedDocumentMimeType = (typeof ACCEPTED_DOCUMENT_MIME_TYPES)[number];
 
+export const ACCEPTED_CLIPBOARD_IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+] as const;
+
+export type AcceptedClipboardImageMimeType = (typeof ACCEPTED_CLIPBOARD_IMAGE_MIME_TYPES)[number];
+
 export const ACCEPTED_DOCUMENT_INPUT_ACCEPT =
-  'application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp';
+  'application/pdf,image/png,image/jpeg,image/webp';
 
 export const UNREADABLE_DOCUMENT_MESSAGE =
   'Não encontramos disciplinas ou prazos acadêmicos legíveis neste arquivo. Tente enviar o PDF do comprovante de matrícula, calendário acadêmico ou um print mais nítido da tela do seu portal.';
@@ -56,6 +64,165 @@ export type DocumentFileValidationResult =
   | { ok: false; error: string };
 
 const ACCEPTED_MIME_SET = new Set<string>(ACCEPTED_DOCUMENT_MIME_TYPES);
+const ACCEPTED_CLIPBOARD_IMAGE_SET = new Set<string>(ACCEPTED_CLIPBOARD_IMAGE_MIME_TYPES);
+
+const CLIPBOARD_EXT_BY_MIME: Record<AcceptedClipboardImageMimeType, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+export interface ClipboardItemLike {
+  kind?: string;
+  type?: string;
+  getAsFile: () => File | Blob | null;
+}
+
+export interface ClipboardDataLike {
+  items?: ArrayLike<ClipboardItemLike> | null;
+  files?: ArrayLike<File | Blob> | null;
+}
+
+export interface AsyncClipboardItemLike {
+  types: readonly string[];
+  getType: (type: string) => Promise<Blob>;
+}
+
+export interface NavigatorClipboardLike {
+  read?: () => Promise<AsyncClipboardItemLike[]>;
+}
+
+export type ClipboardReadOutcome =
+  | { ok: true; file: File }
+  | { ok: false; reason: 'unsupported' | 'permission_denied' | 'no_image'; message: string };
+
+function normalizeClipboardImageMime(raw?: string | null): AcceptedClipboardImageMimeType | null {
+  const lower = String(raw || '').trim().toLowerCase();
+  if (lower === 'image/jpg') return 'image/jpeg';
+  if (ACCEPTED_CLIPBOARD_IMAGE_SET.has(lower)) {
+    return lower as AcceptedClipboardImageMimeType;
+  }
+  return null;
+}
+
+/**
+ * Converts a clipboard image Blob (or File) into a normalized File ready for validateDocumentFile / extract_document.
+ */
+export function blobToClipboardImageFile(
+  blob: Blob | File | null | undefined,
+  explicitMimeType?: string
+): File | null {
+  if (!blob) return null;
+
+  const existingName = 'name' in blob && typeof blob.name === 'string' ? blob.name.trim() : '';
+  const mime =
+    normalizeClipboardImageMime(explicitMimeType) ||
+    normalizeClipboardImageMime(blob.type) ||
+    normalizeClipboardImageMime(resolveDocumentMimeType({ type: blob.type, name: existingName }));
+
+  if (!mime) return null;
+
+  const ext = CLIPBOARD_EXT_BY_MIME[mime];
+  const fileName =
+    existingName && existingName.toLowerCase() !== 'image.png' && existingName.toLowerCase() !== 'blob'
+      ? existingName
+      : `print-grade.${ext}`;
+
+  return new File([blob], fileName, {
+    type: mime,
+    lastModified: Date.now(),
+  });
+}
+
+/**
+ * Extracts the first supported image (PNG/JPEG/WEBP) from a paste event's clipboardData.
+ */
+export function extractImageFileFromClipboardData(
+  clipboardData: ClipboardDataLike | null | undefined
+): File | null {
+  if (!clipboardData) return null;
+
+  const items = clipboardData.items;
+  if (items && items.length > 0) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item || (item.kind && item.kind !== 'file')) continue;
+      const mimeFromItem = normalizeClipboardImageMime(item.type);
+      const raw = typeof item.getAsFile === 'function' ? item.getAsFile() : null;
+      if (!raw) continue;
+      const file = blobToClipboardImageFile(raw, mimeFromItem || raw.type);
+      if (file) return file;
+    }
+  }
+
+  const files = clipboardData.files;
+  if (files && files.length > 0) {
+    for (let i = 0; i < files.length; i++) {
+      const candidate = files[i];
+      const file = blobToClipboardImageFile(candidate, candidate?.type);
+      if (file) return file;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Reads an image screenshot from navigator.clipboard.read() with friendly Portuguese fallbacks
+ * when the browser denies permission, does not support ClipboardItem read, or holds no image.
+ */
+export async function readImageFileFromNavigatorClipboard(
+  clipboard: NavigatorClipboardLike | null | undefined =
+    typeof navigator !== 'undefined' ? (navigator.clipboard as NavigatorClipboardLike | undefined) : null
+): Promise<ClipboardReadOutcome> {
+  if (!clipboard || typeof clipboard.read !== 'function') {
+    return {
+      ok: false,
+      reason: 'unsupported',
+      message:
+        'Seu navegador não libera leitura automática pelo botão. Basta pressionar Ctrl+V nesta janela para colar seu print.',
+    };
+  }
+
+  let items: AsyncClipboardItemLike[];
+  try {
+    items = await clipboard.read();
+  } catch {
+    return {
+      ok: false,
+      reason: 'permission_denied',
+      message:
+        'Permissão da área de transferência bloqueada pelo navegador. Basta pressionar Ctrl+V nesta janela para colar seu print.',
+    };
+  }
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const types = Array.isArray(item?.types) ? item.types : [];
+    const preferredOrder: AcceptedClipboardImageMimeType[] = ['image/png', 'image/jpeg', 'image/webp'];
+    const matchedType =
+      preferredOrder.find((mime) => types.some((t) => normalizeClipboardImageMime(t) === mime)) ||
+      types.find((t) => normalizeClipboardImageMime(t) !== null);
+
+    if (!matchedType) continue;
+
+    try {
+      const blob = await item.getType(matchedType);
+      const file = blobToClipboardImageFile(blob, matchedType);
+      if (file) {
+        return { ok: true, file };
+      }
+    } catch {
+      // try next clipboard item
+    }
+  }
+
+  return {
+    ok: false,
+    reason: 'no_image',
+    message:
+      'Nenhum print foi encontrado na área de transferência. Tire uma captura da tela do portal e clique novamente ou pressione Ctrl+V.',
+  };
+}
 
 const EXTENSION_MIME_MAP: Record<string, AcceptedDocumentMimeType> = {
   '.pdf': 'application/pdf',
