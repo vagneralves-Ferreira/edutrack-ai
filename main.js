@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
 const LIVE_APP_URL = 'https://edutrack-ai-mauve-eight.vercel.app';
+const DEFAULT_TITLE = 'EduTrack AI | Planner Acadêmico Inteligente';
 
 async function createWindow() {
   const win = new BrowserWindow({
@@ -9,13 +10,22 @@ async function createWindow() {
     height: 860,
     minWidth: 1024,
     minHeight: 700,
-    title: 'EduTrack AI | Planner Acadêmico Inteligente',
+    title: DEFAULT_TITLE,
     backgroundColor: '#07070b',
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  win.on('page-title-updated', (event, pageTitle) => {
+    event.preventDefault();
+    const cleanTitle =
+      pageTitle && !/faculdade\s+impacta/i.test(pageTitle)
+        ? pageTitle.trim()
+        : DEFAULT_TITLE;
+    win.setTitle(cleanTitle || DEFAULT_TITLE);
   });
 
   const loadLocalFallback = () => {
