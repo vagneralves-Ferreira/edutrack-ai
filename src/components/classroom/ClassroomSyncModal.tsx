@@ -869,10 +869,41 @@ export const ClassroomSyncModal: React.FC = () => {
 
           {!pendingResult && activeMode === 'paste_import' && (
             <div className="space-y-4">
+              {/* Método Recomendado: Extensão EduTrack AI (Chrome / Edge) */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-600/15 via-indigo-600/10 to-cyan-500/15 border border-violet-500/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-violet-600/25">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs sm:text-sm font-extrabold text-white">
+                          Extensão EduTrack AI (Chrome / Edge)
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/35 text-[10px] font-bold text-emerald-300">
+                          Recomendado
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Sincronize direto do Blackboard, Canvas, Moodle ou Portal do Aluno em 1 clique.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <ol className="text-xs text-slate-200 space-y-1.5 list-decimal list-inside bg-black/25 rounded-xl p-3.5 border border-white/[0.06]">
+                  <li>Instale a extensão <strong>EduTrack AI — Sincronizador Acadêmico</strong> no Chrome ou Edge e entre na sua conta.</li>
+                  <li>Abra a página de <strong>Disciplinas</strong> ou <strong>Calendário</strong> no portal da sua faculdade.</li>
+                  <li>Clique em <strong>Ler esta página</strong> na extensão, revise os itens e clique em <strong>Sincronizar com meu painel</strong>.</li>
+                </ol>
+              </div>
+
+              {/* Alternativa rápida: Colar texto ou enviar arquivo */}
               <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-bold text-slate-200">
-                    Compatível com Blackboard, Canvas, Moodle, Portal do Aluno e Classroom
+                    Ou importe colando o texto do portal
                   </label>
                   <label className="px-3 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-[11px] font-semibold text-slate-300 cursor-pointer transition-colors">
                     Importar arquivo
@@ -884,7 +915,7 @@ export const ClassroomSyncModal: React.FC = () => {
                   <li>Cole o conteúdo no campo abaixo e clique em <strong>Importar Grade e Atividades</strong>.</li>
                 </ol>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
                   placeholder="Cole aqui a lista de disciplinas ou prazos copiada do portal da sua faculdade..."

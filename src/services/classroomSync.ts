@@ -10,6 +10,13 @@ import type {
   TaskType,
 } from '../types';
 import { pastedTaskKey, normalizeText } from './classroomImport';
+import {
+  isCodeSnippetLine,
+  looksLikeSourceCode,
+  parseAcademicPortalText,
+} from './academicParser';
+
+export { isCodeSnippetLine };
 
 /** A Classroom activity ready to become a Kanban card. `subjectId` points to a course draft in `subjects`. */
 export interface ClassroomTaskDraft extends Task {
@@ -737,89 +744,19 @@ export async function fetchGoogleClassroomFullData(
   return { ...buildSyncResultFromCourseBundles(bundles, 'google_api'), warnings };
 }
 
-function parsePortugueseDate(text: string): string | null {
-  // ISO YYYY-MM-DD
-  const isoMatch = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-
-  // DD/MM/YYYY, DD/MM/YY, DD/MM or DD-MM-YYYY
-  const slashMatch = text.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-  if (slashMatch) {
-    const dayNum = Number(slashMatch[1]);
-    const monthNum = Number(slashMatch[2]);
-    if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12) {
-      const day = slashMatch[1].padStart(2, '0');
-      const month = slashMatch[2].padStart(2, '0');
-      const yearRaw = slashMatch[3];
-      const year = yearRaw ? (yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : String(new Date().getFullYear());
-      return `${year}-${month}-${day}`;
-    }
-  }
-
-  // "07 de nov.", "19 de novembro de 2026", "15 nov 2026", "15 nov."
-  const monthsMap: Record<string, string> = {
-    jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06',
-    jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
-  };
-  const ptMatch = text
-    .toLowerCase()
-    .match(/\b(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç.]*(?:\s+(?:de\s+)?(20\d{2}))?\b/i);
-  if (ptMatch) {
-    const day = ptMatch[1].padStart(2, '0');
-    const prefix = ptMatch[2].slice(0, 3).toLowerCase();
-    if (monthsMap[prefix]) {
-      const year = ptMatch[3] || String(new Date().getFullYear());
-      return `${year}-${monthsMap[prefix]}-${day}`;
-    }
-  }
-  return null;
-}
-
-const CODE_LINE_PATTERNS = [
-  /^\s*(var|const|let|function|return|import|export|class|try|catch|finally|for|while|switch|if|else)\b/i,
-  /^\s*(\/\/|\/\*|\*\/|[{}[\]();.,]+)\s*$/,
-  /^\s*<\/?[a-z][\w-]*[\s>]/i,
-  /Classroom\.Courses|ContentService\.createTextOutput|function\s+doGet\s*\(|setMimeType\(|new\s+Date\(\)\.toISOString\(\)/i,
-  /=>\s*\{|\|\|\s*\[\s*\]\s*;|\}\s*\)\s*;?\s*$/,
-  /^\s*(course|teachers|topics|courseWork|submissions|materials|announcements|generatedAt|courses)\s*:\s*[a-zA-Z0-9_.()[\]\s]+,?\s*$/i,
-  /^\s*[a-z_$][\w$]*\s*:\s*[a-z_$][\w$]*\s*,\s*$/i,
-];
-
-export function isCodeSnippetLine(line: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  return CODE_LINE_PATTERNS.some((pattern) => pattern.test(trimmed));
-}
-
 export function isCorruptedCodeTask(task: Pick<Task, 'title'>): boolean {
   return isCodeSnippetLine(task.title || '');
 }
 
-function looksLikeSourceCode(rawContent: string): boolean {
-  if (/Classroom\.Courses\.list|ContentService\.createTextOutput|function\s+doGet\s*\(/i.test(rawContent)) {
-    return true;
-  }
-  const nonEmptyLines = rawContent
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-  if (nonEmptyLines.length === 0) return false;
-  const codeLines = nonEmptyLines.filter(isCodeSnippetLine).length;
-  return codeLines >= 2 && codeLines / nonEmptyLines.length >= 0.25;
-}
-
-
 const UNASSIGNED_COURSE_NAME = 'Atividades sem turma identificada';
 
-function makeCourseDraft(id: string, name: string, index: number, code?: string): Subject {
+function makeCourseDraft(id: string, name: string, index: number, code?: string, professor?: string): Subject {
   const palette = SUBJECT_PALETTES[index % SUBJECT_PALETTES.length];
   return {
     id,
     code: code || `AVA-${slugify(name).slice(0, 8).toUpperCase() || 'TURMA'}`,
     name,
-    professors: ['Prof. Responsável'],
+    professors: [professor || 'Prof. Responsável'],
     progress: 0,
     totalHours: 80,
     completedHours: 0,
@@ -851,7 +788,7 @@ interface RawPastedItem {
 /** Groups pasted items by class (course drafts) and gives each one a stable dedupe key. */
 function buildResultFromPastedItems(
   items: RawPastedItem[],
-  extraSubjects: Array<{ name: string; code?: string }> = []
+  extraSubjects: Array<{ name: string; code?: string; professor?: string }> = []
 ): ClassroomSyncResult {
   const today = toLocalDateString(new Date());
   const drafts = new Map<string, Subject>();
@@ -862,7 +799,7 @@ function buildResultFromPastedItems(
     if (!cleanName) continue;
     const draftId = `paste-course:${normalizeText(cleanName)}`;
     if (!drafts.has(draftId)) {
-      drafts.set(draftId, makeCourseDraft(draftId, cleanName, drafts.size, sub.code));
+      drafts.set(draftId, makeCourseDraft(draftId, cleanName, drafts.size, sub.code, sub.professor));
     }
   }
 
@@ -909,10 +846,8 @@ function buildResultFromPastedItems(
 }
 
 /**
- * Parses text copied from the Google Classroom pages ("Pendentes" / "Atividades") or a JSON export.
- * Classes are only recognised when they match one of the user's subjects by name/code; activities without
- * a recognisable class go to an "unassigned" draft so the user decides where they belong (no silent guess).
- * Never mixes in sample data.
+ * Parses text copied from academic portals (Blackboard, Portal do Aluno, Google Classroom, Canvas, Moodle)
+ * or a JSON export, reusing the shared parser in `academicParser.ts`.
  */
 export function parseClassroomPastedContent(rawContent: string, existingSubjects: Subject[]): ClassroomSyncResult {
   const trimmed = rawContent.trim();
@@ -926,203 +861,37 @@ export function parseClassroomPastedContent(rawContent: string, existingSubjects
     );
   }
 
-  // Case 1: JSON (Apps Script connector output or a structured export)
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    let parsed: any = null;
+  // Case 1: Apps Script connector bundle output ({ courses: [{ course, ... }] })
+  if (trimmed.startsWith('{')) {
     try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      parsed = null; // fall through to the free-text parser
-    }
-    if (parsed) {
+      const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed?.courses) && parsed.courses[0]?.course) {
         return buildSyncResultFromCourseBundles(parsed.courses, 'apps_script');
       }
-      const list = Array.isArray(parsed) ? parsed : parsed.tasks || parsed.courseWork || [];
-      if (Array.isArray(list) && list.length > 0) {
-        const items: RawPastedItem[] = list.map((item: any, idx: number) => {
-          const courseName = item.courseName || item.subjectName || item.turma || null;
-          const rawId = item.id ?? item.courseWorkId;
-          return {
-            title: String(item.title || item.titulo || item.name || `Atividade AVA #${idx + 1}`),
-            courseName: courseName ? String(courseName) : null,
-            dueDate: item.dueDate ? String(item.dueDate).slice(0, 10) : null,
-            turnedIn:
-              item.status === 'completed' || item.status === 'done' || item.state === 'TURNED_IN' || item.state === 'RETURNED',
-            description: item.description ? String(item.description) : undefined,
-            explicitKey:
-              rawId != null && rawId !== ''
-                ? `json:${item.courseId ?? normalizeText(String(courseName || '')).replace(/ /g, '-')}:${rawId}`
-                : undefined,
-          };
-        });
-        return buildResultFromPastedItems(items);
-      }
+    } catch {
+      // fall through to shared parser
     }
   }
 
-  // Case 2: text copied straight from Google Classroom, Blackboard, Área do Aluno (UNICID/Cruzeiro do Sul), Canvas or Moodle
-  const NOISE_LINE_REGEX =
-    /^(pular para o conte[úu]do.*|google\s*(sala de aula|classroom)|blackboard(\s+learn)?|canvas|moodle|[áa]rea do aluno|portal do aluno|p[áa]gina da institui[çc][ãa]o|fluxo de atividades|menu principal|pendentes?|conclu[ií]das?|atribu[ií]d[ao]s?|todas as turmas|turmas|cursos(\s+atuais)?|todos os cursos|meus cursos|minhas disciplinas|disciplinas|organiza[çc][õo]es|calend[áa]rio|mensagens|ferramentas|sair|acessibilidade|privacidade|termos|pesquisar cursos.*|filtro|filtros|aberto|fechado|privado|m[óo]dulos|avisos|agenda|para fazer|inscrito|configura[çc][õo]es|ajuda|feedback|sem data.*|sem prazo|hoje|amanh[ãa]|pr[óo]xim[oa]s?|esta semana|pr[oó]xima semana|mais tarde|anteriores|ver tudo|ver detalhes|visualizar|carregar mais|nenhuma atividade|nenhum trabalho|nenhum material|mural|atividades|pessoas|notas|criar|postado em.*|editado.*|data de entrega:?|cruzeiro do sul(\s+educacional)?|unicid|v[áa]rios instrutores|\d{1,2}:\d{2})$/i;
+  // Case 2: Shared parser (JSON array/object, Blackboard, Portal do Aluno, Classroom, Canvas, Moodle)
+  const parsedPortal = parseAcademicPortalText(trimmed, existingSubjects);
 
-  const EXPLICIT_SUBJECT_REGEX = /^(?:disciplina|curso|mat[ée]ria|turma)\s*[:\-–]\s*(.{3,100})$/i;
-  const CODE_AND_SUBJECT_REGEX =
-    /^((?:20\d{2}[._-]?\d?[._-]?)?(?:[A-Z]{2,8}[._-])*[A-Z]{2,8}[._-]?\d{2,6}(?:[._-][A-Z0-9]+)*|\d{5,9}(?:[._-]\d{1,4})?|20\d{2}[./-][12])\s*[-–—•|:]\s*(.{4,100})$/;
-  const STANDALONE_COURSE_CODE_REGEX =
-    /^(?:20\d{2}[._-]\d[._-][A-Z0-9._-]{2,}|[A-Z]{2,6}[_-]\d{2,6}(?:[_-][A-Z0-9]+)*|\d{5,9}[_-][A-Z0-9_-]{2,})$/;
-  const DATE_ONLY_LABEL_REGEX =
-    /^(?:(?:data de entrega|entrega|prazo|vence em|vencimento|due(?:\s+date)?)\s*[:\-–]?\s*)?(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{4}-\d{2}-\d{2}|\d{1,2}\s+(?:de\s+)?(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç.]*(?:\s+(?:de\s+)?20\d{2})?)(?:\s*(?:[àa]s|-|•|,)?\s*\d{1,2}:\d{2}(?::\d{2})?)?$/i;
-
-  const lines = trimmed
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 2 && !/^[A-ZÀ-Ú]$/.test(l));
-
-  const items: RawPastedItem[] = [];
-  const discoveredSubjects = new Map<string, { name: string; code?: string }>();
-  let currentSubject: { name: string; code?: string } | null = null;
-  let currentTurnedIn = false;
-  let pendingDueDate: string | null = null;
-
-  const registerSubject = (name: string, code?: string) => {
-    const cleanName = name.replace(/\s+/g, ' ').trim();
-    if (cleanName.length < 3) return null;
-    const key = normalizeText(cleanName);
-    if (!discoveredSubjects.has(key)) {
-      discoveredSubjects.set(key, { name: cleanName, code });
-    }
-    return discoveredSubjects.get(key)!;
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (/^(conclu[ií]da|entregue|devolvida|enviado|nota\b)/i.test(line)) {
-      if (items.length > 0 && /entregue|devolvida|enviado/i.test(line)) {
-        items[items.length - 1].turnedIn = true;
-      } else {
-        currentTurnedIn = true;
-      }
-      continue;
-    }
-    if (/^(atribu[ií]d[ao]|pendente|a fazer|em aberto|com atraso|atrasad[oa]|n[ãa]o enviado)/i.test(line)) {
-      if (items.length > 0 && /com atraso|atrasad[oa]|pendente/i.test(line)) {
-        items[items.length - 1].urgent = true;
-      } else {
-        currentTurnedIn = false;
-      }
-      continue;
-    }
-
-    // 1. Explicit subject label ("Disciplina: Anatomia Humana", "Curso: ...")
-    const explicitSubject = line.match(EXPLICIT_SUBJECT_REGEX);
-    if (explicitSubject) {
-      const sub = registerSubject(explicitSubject[1]);
-      if (sub) currentSubject = sub;
-      continue;
-    }
-
-    // 2. Blackboard / Portal line combining course code + subject name ("20262_BIO_101 - Anatomia Humana")
-    const codeAndSubject = line.match(CODE_AND_SUBJECT_REGEX);
-    if (codeAndSubject && !parsePortugueseDate(codeAndSubject[1])) {
-      const code = codeAndSubject[1].trim();
-      const subName = codeAndSubject[2].trim();
-      const sub = registerSubject(subName, code);
-      if (sub) currentSubject = sub;
-      continue;
-    }
-
-    // 3. Standalone Blackboard course code ("20262_GRAD_BIO_101") followed by subject name on next line
-    if (STANDALONE_COURSE_CODE_REGEX.test(line)) {
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
-        if (
-          !NOISE_LINE_REGEX.test(nextLine) &&
-          !DATE_ONLY_LABEL_REGEX.test(nextLine) &&
-          !isCodeSnippetLine(nextLine)
-        ) {
-          const sub = registerSubject(nextLine, line);
-          if (sub) currentSubject = sub;
-          i++;
-        }
-      }
-      continue;
-    }
-
-    // 4. A short line naming one of the user's existing subjects is a class header (or the class of the previous card).
-    const matchedSub = existingSubjects.find(
-      (s) =>
-        line.toLowerCase().includes(s.name.toLowerCase()) ||
-        (s.code && line.toLowerCase().includes(s.code.toLowerCase()))
-    );
-    if (matchedSub && line.length <= matchedSub.name.length + 20) {
-      if (items.length > 0 && i > 0 && !NOISE_LINE_REGEX.test(lines[i - 1])) {
-        const last = items[items.length - 1];
-        if (!last.courseName) {
-          last.courseName = matchedSub.name;
-          last.courseCode = matchedSub.code;
-        }
-      }
-      currentSubject = { name: matchedSub.name, code: matchedSub.code };
-      continue;
-    }
-
-    if (NOISE_LINE_REGEX.test(line) || isCodeSnippetLine(line)) {
-      continue;
-    }
-
-    // 5. A date-only line ("Entrega: 25/11/2026 23:59", "Prazo: 30/11/2026", "15 de nov.")
-    const onlyDate = parsePortugueseDate(line);
-    const isDateOnlyLine = !!onlyDate && (DATE_ONLY_LABEL_REGEX.test(line) || line.length < 32);
-    if (isDateOnlyLine) {
-      if (items.length > 0 && !items[items.length - 1].dueDate) {
-        items[items.length - 1].dueDate = onlyDate;
-      } else {
-        // Blackboard calendar often puts the date header BEFORE the activity card
-        pendingDueDate = onlyDate;
-      }
-      continue;
-    }
-
-    let dueDate: string | null = onlyDate || pendingDueDate;
-    pendingDueDate = null;
-
-    if (!dueDate && i + 1 < lines.length) {
-      const nextLine = lines[i + 1];
-      const nextDate = parsePortugueseDate(nextLine);
-      if (nextDate && (DATE_ONLY_LABEL_REGEX.test(nextLine) || nextLine.length < 32)) {
-        dueDate = nextDate;
-        i++;
-      }
-    }
-
-    const cleanTitle = line
-      .replace(/(?:data de entrega|entrega|prazo|vence em|vencimento)\s*[:\-–]?\s*/gi, '')
-      .replace(/\b20\d{2}-\d{2}-\d{2}\b/, '')
-      .replace(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/, '')
-      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/, '')
-      .replace(/\s*[-–—•|]\s*$/, '')
-      .replace(/^\s*[-–—•|]\s*/, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 110);
-
-    if (!cleanTitle || cleanTitle.length < 3) continue;
-
-    items.push({
-      title: cleanTitle,
-      courseName: currentSubject ? currentSubject.name : null,
-      courseCode: currentSubject?.code,
-      dueDate,
-      turnedIn: currentTurnedIn || /entregue|conclu/i.test(line),
-    });
-  }
-
-  if (items.length === 0 && discoveredSubjects.size === 0) {
+  if (parsedPortal.tasks.length === 0 && parsedPortal.subjects.length === 0) {
     throw new Error(
       'Nenhuma disciplina ou entrega foi identificada no texto colado. Copie a lista de disciplinas ou prazos do portal da sua faculdade e tente novamente.'
     );
   }
 
-  return buildResultFromPastedItems(items, [...discoveredSubjects.values()]);
+  const items: RawPastedItem[] = parsedPortal.tasks.map((t) => ({
+    title: t.title,
+    courseName: t.courseName,
+    courseCode: t.courseCode,
+    dueDate: t.dueDate,
+    turnedIn: t.turnedIn,
+    urgent: t.urgent,
+    description: t.description,
+    explicitKey: t.explicitKey,
+  }));
+
+  return buildResultFromPastedItems(items, parsedPortal.subjects);
 }
