@@ -16,6 +16,8 @@ import {
   GraduationCap,
   Puzzle,
   User,
+  ClipboardPaste,
+  Plus,
 } from 'lucide-react';
 import { usePlanner, type CourseResolution, type ClassroomApplySummary } from '../../context/PlannerContext';
 import { useAuth } from '../../context/AuthContext';
@@ -29,7 +31,9 @@ import {
   ACCEPTED_DOCUMENT_INPUT_ACCEPT,
   buildDocumentSyncPayload,
   extractDocumentViaAI,
+  extractImageFileFromClipboardData,
   getOfficialExtensionStoreUrl,
+  readImageFileFromNavigatorClipboard,
   type DocumentExtractionPreview,
 } from '../../services/documentImport';
 import {
@@ -107,6 +111,8 @@ export const ClassroomSyncModal: React.FC = () => {
   const {
     isClassroomModalOpen,
     setIsClassroomModalOpen,
+    setActiveTab,
+    setIsNewSubjectModalOpen,
     subjects,
     applyClassroomSyncResult,
     lastClassroomSync,
@@ -360,6 +366,66 @@ export const ClassroomSyncModal: React.FC = () => {
     } finally {
       setIsAnalyzingDocument(false);
     }
+  };
+
+  const handleDocumentSelectedRef = useRef(handleDocumentSelected);
+  handleDocumentSelectedRef.current = handleDocumentSelected;
+
+  // Native Ctrl+V / Cmd+V screenshot paste listener while modal is open on "Enviar Grade"
+  useEffect(() => {
+    if (
+      !isClassroomModalOpen ||
+      activeMode !== 'upload_document' ||
+      pendingResult ||
+      isAnalyzingDocument ||
+      isLoading
+    ) {
+      return;
+    }
+
+    const handleWindowPaste = (e: ClipboardEvent) => {
+      const pastedImage = extractImageFileFromClipboardData(e.clipboardData);
+      if (pastedImage) {
+        e.preventDefault();
+        void handleDocumentSelectedRef.current(pastedImage);
+        return;
+      }
+
+      const hasAnyData =
+        Boolean(e.clipboardData?.items?.length) ||
+        Boolean(e.clipboardData?.files?.length) ||
+        Boolean(e.clipboardData?.getData?.('text/plain'));
+
+      if (hasAnyData) {
+        e.preventDefault();
+        setErrorScopes(null);
+        setSuccessMsg(null);
+        setErrorMsg(
+          'Nenhuma imagem de print foi encontrada ao colar. Tire um print da tela do portal e pressione Ctrl+V aqui, ou selecione um PDF/imagem.'
+        );
+      }
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, [isClassroomModalOpen, activeMode, pendingResult, isAnalyzingDocument, isLoading]);
+
+  const handlePasteButtonClick = async () => {
+    if (isAnalyzingDocument || isLoading) return;
+    clearFeedback();
+    const outcome = await readImageFileFromNavigatorClipboard();
+    if (outcome.ok) {
+      await handleDocumentSelected(outcome.file);
+      return;
+    }
+    setErrorMsg(outcome.message);
+  };
+
+  const handleOpenManualSubjectModal = () => {
+    if (isAnalyzingDocument || isLoading) return;
+    setIsClassroomModalOpen(false);
+    setActiveTab('disciplinas');
+    setIsNewSubjectModalOpen(true);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1209,16 +1275,57 @@ export const ClassroomSyncModal: React.FC = () => {
                 </div>
               )}
 
-              {/* State C: Modern Drag & Drop Area */}
+              {/* State C: Mini-guide + Modern Drag & Drop / Paste Area */}
               {!isAnalyzingDocument && !documentPreview && (
                 <>
+                  {/* Compact 10-second visual mini-guide */}
+                  <div
+                    data-testid="upload-quick-guide"
+                    className={`p-3.5 rounded-2xl space-y-2.5 ${cardSurface}`}
+                  >
+                    <p
+                      className={`text-[11px] font-extrabold uppercase tracking-wider ${
+                        isLight ? 'text-violet-800' : 'text-violet-300'
+                      }`}
+                    >
+                      Como fazer em 10 segundos
+                    </p>
+                    <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {[
+                        'Abra a grade ou calendário no portal da faculdade',
+                        'Tire um print da tela ou baixe o PDF',
+                        'Cole aqui (Ctrl+V) ou envie o arquivo — você revisa tudo antes de salvar',
+                      ].map((stepText, idx) => (
+                        <li
+                          key={idx}
+                          className={`flex items-start gap-2 rounded-xl px-2.5 py-2 border text-[11px] leading-snug ${
+                            isLight
+                              ? 'bg-white border-slate-200 text-slate-700'
+                              : 'bg-white/[0.04] border-white/10 text-slate-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-extrabold shrink-0 mt-0.5 ${
+                              isLight
+                                ? 'bg-violet-100 border-violet-200 text-violet-800'
+                                : 'bg-violet-500/20 border-violet-500/35 text-violet-200'
+                            }`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span>{stepText}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
                   <div
                     role="button"
                     tabIndex={0}
                     data-testid="document-dropzone"
                     onClick={() => fileInputRef.current?.click()}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                         e.preventDefault();
                         fileInputRef.current?.click();
                       }
@@ -1227,7 +1334,7 @@ export const ClassroomSyncModal: React.FC = () => {
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`rounded-2xl border-2 border-dashed p-8 sm:p-10 text-center transition-all cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+                    className={`rounded-2xl border-2 border-dashed p-7 sm:p-8 text-center transition-all cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-violet-500 ${
                       isDraggingOver
                         ? isLight
                           ? 'bg-violet-50 border-violet-600 scale-[1.01]'
@@ -1258,11 +1365,34 @@ export const ClassroomSyncModal: React.FC = () => {
                       Canvas, Moodle, etc.).
                     </p>
 
-                    <div className="mt-5 flex flex-col items-center gap-2.5">
-                      <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20">
-                        <FileText className="w-4 h-4" />
-                        <span>Escolher arquivo ou arrastar aqui</span>
-                      </span>
+                    <div className="mt-5 flex flex-col items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-violet-600/20 transition-all cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Escolher arquivo ou arrastar aqui</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid="paste-screenshot-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handlePasteButtonClick();
+                          }}
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${secondaryBtnClass}`}
+                        >
+                          <ClipboardPaste className="w-4 h-4" />
+                          <span>Colar print (Ctrl+V)</span>
+                        </button>
+                      </div>
+
                       <span className={`text-[11px] font-medium ${subtleText}`}>
                         Formatos aceitos: PDF, PNG, JPG ou WEBP • Máximo de 5 MB
                       </span>
@@ -1474,6 +1604,32 @@ export const ClassroomSyncModal: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+
+        {/* Discreet Footer: Quick exit to manual subject creation */}
+        <div
+          className={`px-6 py-3.5 border-t flex items-center justify-center ${
+            isLight
+              ? 'bg-slate-50 border-slate-200'
+              : 'bg-[#0c0d14] border-white/10'
+          }`}
+        >
+          <button
+            type="button"
+            data-testid="manual-subject-shortcut"
+            disabled={isLoading || isAnalyzingDocument}
+            onClick={handleOpenManualSubjectModal}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+              isLight
+                ? 'text-slate-600 hover:text-violet-700'
+                : 'text-slate-400 hover:text-cyan-300'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="underline underline-offset-4">
+              Sem o arquivo agora? Adicionar disciplina manualmente
+            </span>
+          </button>
         </div>
       </div>
     </div>,

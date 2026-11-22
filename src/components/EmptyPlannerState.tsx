@@ -15,7 +15,13 @@ export const EmptyPlannerState: React.FC<EmptyPlannerStateProps> = ({
   description,
   onAddSubject,
 }) => {
-  const { setActiveTab, setIsClassroomModalOpen, loadExampleData, isLoadingData } = usePlanner();
+  const {
+    setActiveTab,
+    setIsClassroomModalOpen,
+    setIsNewSubjectModalOpen,
+    loadExampleData,
+    isLoadingData,
+  } = usePlanner();
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -52,7 +58,13 @@ export const EmptyPlannerState: React.FC<EmptyPlannerStateProps> = ({
 
         <button
           type="button"
-          onClick={onAddSubject ?? (() => setActiveTab('disciplinas'))}
+          onClick={
+            onAddSubject ??
+            (() => {
+              setActiveTab('disciplinas');
+              setIsNewSubjectModalOpen(true);
+            })
+          }
           className={`inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
             isLight
               ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'

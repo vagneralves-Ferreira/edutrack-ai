@@ -9,10 +9,14 @@ import {
   validateDocumentRequest,
 } from '../../../supabase/functions/ai-dicas/extractDocument.ts';
 import {
+  ACCEPTED_DOCUMENT_INPUT_ACCEPT,
+  blobToClipboardImageFile,
   buildDocumentSyncPayload,
   buildDocumentTaskKey,
+  extractImageFileFromClipboardData,
   getOfficialExtensionStoreUrl,
   parseExtractedDocumentPayload,
+  readImageFileFromNavigatorClipboard,
   validateDocumentFile,
 } from '../documentImport';
 import { planClassroomTaskWrites } from '../classroomImport';
@@ -342,5 +346,127 @@ describe('Frontend documentImport — validação, prévia, deduplicação idemp
         'https://microsoftedge.microsoft.com/addons/detail/edutrack-ai/abcdefghij'
       )
     ).toBe('https://microsoftedge.microsoft.com/addons/detail/edutrack-ai/abcdefghij');
+  });
+});
+
+describe('Clipboard paste — extração de prints (Ctrl+V e navigator.clipboard.read)', () => {
+  it('mantém o atributo accept otimizado para PDF e imagens em desktop e celulares', () => {
+    expect(ACCEPTED_DOCUMENT_INPUT_ACCEPT).toBe(
+      'application/pdf,image/png,image/jpeg,image/webp'
+    );
+  });
+
+  it('converte Blobs de imagem (PNG, JPEG, WEBP) em File válido e rejeita formatos não suportados', () => {
+    const pngBlob = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+    const pngFile = blobToClipboardImageFile(pngBlob);
+    expect(pngFile).not.toBeNull();
+    expect(pngFile!.name).toBe('print-grade.png');
+    expect(pngFile!.type).toBe('image/png');
+    expect(validateDocumentFile(pngFile!)).toEqual({ ok: true, mimeType: 'image/png' });
+
+    const jpgBlob = new Blob([new Uint8Array([255, 216, 255])], { type: 'image/jpg' });
+    const jpgFile = blobToClipboardImageFile(jpgBlob);
+    expect(jpgFile).not.toBeNull();
+    expect(jpgFile!.name).toBe('print-grade.jpg');
+    expect(jpgFile!.type).toBe('image/jpeg');
+    expect(validateDocumentFile(jpgFile!)).toEqual({ ok: true, mimeType: 'image/jpeg' });
+
+    const webpBlob = new Blob([new Uint8Array([82, 73, 70, 70])], { type: 'image/webp' });
+    const webpFile = blobToClipboardImageFile(webpBlob);
+    expect(webpFile).not.toBeNull();
+    expect(webpFile!.name).toBe('print-grade.webp');
+    expect(validateDocumentFile(webpFile!)).toEqual({ ok: true, mimeType: 'image/webp' });
+
+    const gifBlob = new Blob([new Uint8Array([71, 73, 70])], { type: 'image/gif' });
+    expect(blobToClipboardImageFile(gifBlob)).toBeNull();
+
+    const textBlob = new Blob(['texto simples'], { type: 'text/plain' });
+    expect(blobToClipboardImageFile(textBlob)).toBeNull();
+  });
+
+  it('extrai imagem colada via clipboardData.items ignorando itens de texto e suporta fallback de files', () => {
+    const screenshotBlob = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10])], {
+      type: 'image/png',
+    });
+
+    const extracted = extractImageFileFromClipboardData({
+      items: [
+        { kind: 'string', type: 'text/plain', getAsFile: () => null },
+        { kind: 'file', type: 'image/png', getAsFile: () => screenshotBlob },
+      ],
+    });
+
+    expect(extracted).not.toBeNull();
+    expect(extracted!.name).toBe('print-grade.png');
+    expect(extracted!.type).toBe('image/png');
+    expect(validateDocumentFile(extracted!)).toEqual({ ok: true, mimeType: 'image/png' });
+
+    // Fallback para clipboardData.files quando items estiver vazio
+    const jpegFile = new File([new Uint8Array([255, 216, 255])], 'captura-unicid.jpg', {
+      type: 'image/jpeg',
+    });
+    const fromFiles = extractImageFileFromClipboardData({
+      items: [],
+      files: [jpegFile],
+    });
+    expect(fromFiles).not.toBeNull();
+    expect(fromFiles!.name).toBe('captura-unicid.jpg');
+    expect(fromFiles!.type).toBe('image/jpeg');
+
+    // Retorna null quando há apenas texto colado
+    expect(
+      extractImageFileFromClipboardData({
+        items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }],
+      })
+    ).toBeNull();
+  });
+
+  it('lê print via navigator.clipboard.read() e retorna orientações amigáveis em bloqueio ou ausência de imagem', async () => {
+    const pngBlob = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+    const okResult = await readImageFileFromNavigatorClipboard({
+      read: async () => [
+        {
+          types: ['text/html', 'image/png'],
+          getType: async () => pngBlob,
+        },
+      ],
+    });
+    expect(okResult.ok).toBe(true);
+    if (okResult.ok) {
+      expect(okResult.file.type).toBe('image/png');
+      expect(validateDocumentFile(okResult.file)).toEqual({ ok: true, mimeType: 'image/png' });
+    }
+
+    const unsupportedResult = await readImageFileFromNavigatorClipboard(null);
+    expect(unsupportedResult.ok).toBe(false);
+    if (!unsupportedResult.ok) {
+      expect(unsupportedResult.reason).toBe('unsupported');
+      expect(unsupportedResult.message).toContain('Ctrl+V');
+    }
+
+    const deniedResult = await readImageFileFromNavigatorClipboard({
+      read: async () => {
+        throw new Error('NotAllowedError');
+      },
+    });
+    expect(deniedResult.ok).toBe(false);
+    if (!deniedResult.ok) {
+      expect(deniedResult.reason).toBe('permission_denied');
+      expect(deniedResult.message).toContain('Ctrl+V');
+    }
+
+    const noImageResult = await readImageFileFromNavigatorClipboard({
+      read: async () => [
+        {
+          types: ['text/plain'],
+          getType: async () => new Blob(['olá'], { type: 'text/plain' }),
+        },
+      ],
+    });
+    expect(noImageResult.ok).toBe(false);
+    if (!noImageResult.ok) {
+      expect(noImageResult.reason).toBe('no_image');
+      expect(noImageResult.message).toMatch(/nenhum print/i);
+    }
   });
 });

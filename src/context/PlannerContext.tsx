@@ -100,6 +100,8 @@ interface PlannerContextType {
   logStudyTime: (subjectId: string, minutes: number) => void;
   isNewTaskModalOpen: boolean;
   setIsNewTaskModalOpen: (open: boolean) => void;
+  isNewSubjectModalOpen: boolean;
+  setIsNewSubjectModalOpen: (open: boolean) => void;
   isLoadingData: boolean;
   /** True once subjects/tasks for the current user were loaded from Supabase (success or error). */
   isPlannerReady: boolean;
@@ -375,6 +377,7 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [subjects, setSubjects] = useState<Subject[]>(() => loadSubjectsFromStorage(userId));
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(() => subjects[0] || null);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState<boolean>(false);
+  const [isNewSubjectModalOpen, setIsNewSubjectModalOpen] = useState<boolean>(false);
   const [isClassroomModalOpen, setIsClassroomModalOpen] = useState<boolean>(false);
   const [lastClassroomSync, setLastClassroomSync] = useState<ClassroomSyncMetadata | null>(() =>
     loadSyncMetaFromStorage(userId)
@@ -1289,6 +1292,8 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         logStudyTime,
         isNewTaskModalOpen,
         setIsNewTaskModalOpen,
+        isNewSubjectModalOpen,
+        setIsNewSubjectModalOpen,
         isLoadingData,
         isPlannerReady,
         loadError,

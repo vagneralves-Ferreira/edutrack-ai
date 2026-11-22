@@ -42,6 +42,8 @@ export const SubjectsView: React.FC = () => {
     updateSubject,
     deleteSubject,
     setIsClassroomModalOpen,
+    isNewSubjectModalOpen: isModalOpen,
+    setIsNewSubjectModalOpen: setIsModalOpen,
     updateTaskStatus,
     loadError,
   } = usePlanner();
@@ -56,7 +58,6 @@ export const SubjectsView: React.FC = () => {
   const [isBusy, setIsBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'success' | 'warning'; text: string } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterial | null>(null);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
