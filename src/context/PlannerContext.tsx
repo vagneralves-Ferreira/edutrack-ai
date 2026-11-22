@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { Subject, Task, TaskStatus, ViewTab } from '../types';
+import type { MaterialAttachment, Subject, Task, TaskStatus, ViewTab } from '../types';
 import { INITIAL_SUBJECTS, INITIAL_TASKS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -180,7 +180,9 @@ function normalizeSubject(raw: any): Subject {
  * Materials, evaluations and topics read from Classroom, per public.subjects id. There is no column for them in
  * Supabase, so they are kept in this browser and re-applied whenever subjects are reloaded from the database.
  */
-type ClassroomSubjectData = Pick<Subject, 'materials' | 'evaluations' | 'topics' | 'modules'>;
+type ClassroomSubjectData = Pick<Subject, 'materials' | 'evaluations' | 'topics' | 'modules'> & {
+  taskAttachments?: Record<string, MaterialAttachment[]>;
+};
 const CLASSROOM_DATA_KEY = 'edutrack_classroom_subject_data_v1';
 
 function loadClassroomSubjectData(userId?: string | null): Record<string, ClassroomSubjectData> {
@@ -333,12 +335,17 @@ function mergeClassroomSubjectData<T extends ClassroomSubjectData>(target: T, fr
     ...a,
     ...b.filter((item) => !a.some((x) => x.id === item.id)),
   ];
+  const mergedTaskAttachments =
+    target.taskAttachments || fromClassroom.taskAttachments
+      ? { ...(target.taskAttachments || {}), ...(fromClassroom.taskAttachments || {}) }
+      : undefined;
   return {
     ...target,
     materials: mergeById(target.materials, fromClassroom.materials),
     evaluations: mergeById(target.evaluations, fromClassroom.evaluations),
     topics: target.topics?.length ? target.topics : fromClassroom.topics || [],
     modules: target.modules?.length ? target.modules : fromClassroom.modules || [],
+    ...(mergedTaskAttachments ? { taskAttachments: mergedTaskAttachments } : {}),
   };
 }
 
@@ -390,9 +397,22 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Classroom content saved for each public.subjects row (by id), re-applied by subject name after dedupe.
     const stored = loadClassroomSubjectData(userId);
     const classroomByName = new Map<string, ClassroomSubjectData>();
+    const taskAttachmentsByClassroomId = new Map<string, MaterialAttachment[]>();
     for (const row of dbSubjects) {
       const data = stored[String(row.id)];
       if (!data) continue;
+      if (data.taskAttachments) {
+        for (const [cid, atts] of Object.entries(data.taskAttachments)) {
+          if (Array.isArray(atts) && atts.length > 0) {
+            taskAttachmentsByClassroomId.set(cid, atts);
+          }
+        }
+      }
+      for (const mat of data.materials || []) {
+        if (mat.classroomId && Array.isArray(mat.attachments) && mat.attachments.length > 0 && !taskAttachmentsByClassroomId.has(mat.classroomId)) {
+          taskAttachmentsByClassroomId.set(mat.classroomId, mat.attachments);
+        }
+      }
       const key = normalizeText(row.nome);
       const prev = classroomByName.get(key);
       classroomByName.set(key, prev ? mergeClassroomSubjectData(prev, data) : data);
@@ -408,7 +428,11 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedSubject((prev) => uniqueDbSubjects.find((s) => s.id === prev?.id) || uniqueDbSubjects[0] || null);
     persistSubjectsToStorage(uniqueDbSubjects, userId);
 
-    const cleanDbTasks = mapDbTasks(dbTasks, dbSubjects, uniqueDbSubjects);
+    const cleanDbTasks = mapDbTasks(dbTasks, dbSubjects, uniqueDbSubjects).map((task) => {
+      if (!task.classroomId) return task;
+      const atts = taskAttachmentsByClassroomId.get(task.classroomId);
+      return atts && atts.length > 0 ? { ...task, attachments: atts } : task;
+    });
     setTasks(cleanDbTasks);
     const tasksKey = getScopedKey(STORAGE_KEYS.TASKS, userId);
     if (tasksKey) localStorage.setItem(tasksKey, JSON.stringify(cleanDbTasks));
@@ -833,6 +857,15 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           skippedTasks++;
           continue;
         }
+        if (task.classroomId && Array.isArray(task.attachments) && task.attachments.length > 0) {
+          const subjectData = classroomDataBySubjectId.get(subjectUuid);
+          if (subjectData) {
+            subjectData.taskAttachments = {
+              ...(subjectData.taskAttachments || {}),
+              [task.classroomId]: task.attachments,
+            };
+          }
+        }
         incoming.push({
           classroomId: task.classroomId,
           title: task.title,
@@ -862,11 +895,19 @@ export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       // 3. Reload from the database so every card carries its real UUID.
       const { dbSubjects, dbTasks } = await fetchDbRows(uid);
-      // This sync's Classroom content replaces what was saved before for the same subjects.
-      saveClassroomSubjectData(userId, {
-        ...loadClassroomSubjectData(userId),
-        ...Object.fromEntries(classroomDataBySubjectId),
-      });
+      const prevStored = loadClassroomSubjectData(userId);
+      const hasPartialWarnings = Array.isArray(result.warnings) && result.warnings.length > 0;
+      const nextStored: Record<string, ClassroomSubjectData> = { ...prevStored };
+      for (const [subId, incomingData] of classroomDataBySubjectId.entries()) {
+        const existingData = prevStored[subId];
+        nextStored[subId] =
+          hasPartialWarnings && existingData
+            ? mergeClassroomSubjectData(incomingData, existingData)
+            : existingData?.taskAttachments && !incomingData.taskAttachments
+            ? { ...incomingData, taskAttachments: existingData.taskAttachments }
+            : incomingData;
+      }
+      saveClassroomSubjectData(userId, nextStored);
       applyDbSnapshot(dbSubjects, dbTasks);
 
       const meta: ClassroomSyncMetadata = {

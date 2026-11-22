@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { usePlanner } from '../context/PlannerContext';
 import type { TaskStatus } from '../types';
@@ -71,7 +72,7 @@ export const TasksView: React.FC = () => {
 
   // Google Classroom Sync Modal Trigger
   const [isSyncingClassroom] = useState(false);
-  const [syncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
+  const [syncStepMessage] = useState('Autenticando via Google Workspace...');
   const [syncSuccessBanner] = useState<string | null>(null);
 
   const handleSyncClassroom = () => {
@@ -190,7 +191,7 @@ export const TasksView: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{syncSuccessBanner}</span>
           </div>
-          <span className="text-[11px] font-mono text-emerald-400/90">Google Workspace • Impacta</span>
+          <span className="text-[11px] font-mono text-emerald-400/90">Google Workspace</span>
         </div>
       )}
 
@@ -564,7 +565,7 @@ export const TasksView: React.FC = () => {
       )}
 
       {/* High-Fidelity Google Classroom OAuth / Sync Modal */}
-      {isSyncingClassroom && (
+      {isSyncingClassroom && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md rounded-2xl bento-card p-7 shadow-2xl text-center space-y-5">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shadow-inner">
@@ -580,7 +581,7 @@ export const TasksView: React.FC = () => {
                 {syncStepMessage}
               </h3>
               <p className="text-xs text-slate-400">
-                Conectado ao domínio institucional <span className="text-amber-400 font-mono">@impacta.edu.br</span>
+                Conectado à sua conta institucional via Google Workspace
               </p>
             </div>
 
@@ -588,7 +589,8 @@ export const TasksView: React.FC = () => {
               <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#4285F4] via-[#34A853] to-[#FBBC05] animate-pulse" />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

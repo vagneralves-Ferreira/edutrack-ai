@@ -33,6 +33,11 @@ interface AuthContextType {
   updateProfileName: (name: string) => Promise<{ success: boolean; error?: string }>;
 }
 
+export function resolveUserInstitution(institution?: string | null): string | undefined {
+  const trimmed = institution?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /** One-time cleanup of legacy offline-auth and plaintext-password localStorage keys. */
@@ -226,15 +231,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const emailPrefix = user?.email ? user.email.split('@')[0] : 'Usuário';
-  const cleanUserEmail = user?.email?.toLowerCase() || '';
   const supaMeta = (user?.user_metadata || {}) as RegisterMetadata;
   // Older builds stored the e-mail prefix in profiles.nome; treat that as "no name".
   const isRealName = (value?: string | null): value is string =>
     !!value && !!value.trim() && value.trim().toLowerCase() !== emailPrefix.toLowerCase();
   const realName = isRealName(profileName) ? profileName.trim() : isRealName(supaMeta.name) ? supaMeta.name.trim() : null;
-  const resolvedInstitution =
-    supaMeta.institution ||
-    (cleanUserEmail.includes('impacta.edu') ? 'Faculdade Impacta' : 'Minha Faculdade');
+  const resolvedInstitution = resolveUserInstitution(supaMeta.institution);
 
   const appUser = user
     ? ({

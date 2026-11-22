@@ -2,12 +2,37 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
+import { useAuth } from '../context/AuthContext';
 import { AiDica } from '../components/AiDica';
 import { EmptyPlannerState } from '../components/EmptyPlannerState';
 import { formatDateBR } from '../utils/helpers';
-import type { StudyMaterial } from '../types';
+import type { MaterialAttachment, StudyMaterial } from '../types';
+
+const ATTACHMENT_TYPE_LABELS: Record<MaterialAttachment['type'], string> = {
+  drive: 'Google Drive',
+  youtube: 'YouTube',
+  form: 'Formulário',
+  link: 'Link',
+  classroom: 'Classroom',
+};
+
+const ATTACHMENT_OPEN_LABELS: Record<MaterialAttachment['type'], string> = {
+  drive: 'Abrir no Drive',
+  youtube: 'Assistir',
+  form: 'Abrir Formulário',
+  link: 'Abrir Link',
+  classroom: 'Abrir no Classroom',
+};
+
+function resolveAttachmentUrl(att: MaterialAttachment): string {
+  const candidate = att.url || att.alternateLink || '';
+  if (/^https?:\/\//i.test(candidate)) return candidate;
+  if (att.driveFileId) return `https://drive.google.com/file/d/${att.driveFileId}/view`;
+  return candidate;
+}
 
 export const SubjectsView: React.FC = () => {
+  const { currentUser } = useAuth();
   const {
     subjects,
     tasks,
@@ -148,7 +173,7 @@ export const SubjectsView: React.FC = () => {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Disciplinas & Ementas Acadêmicas</h1>
             <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
-              Conteúdo programático, tópicos ministrados e materiais de estudo da Faculdade Impacta
+              Conteúdo programático, tópicos ministrados e materiais de estudo
             </p>
           </div>
         </div>
@@ -248,7 +273,7 @@ export const SubjectsView: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">{activeSubject.code}</span>
-                  <span className="text-xs text-slate-400">Faculdade Impacta Tecnologia</span>
+                  <span className="text-xs text-slate-400">{currentUser?.institution || 'Planner Acadêmico'}</span>
                 </div>
                 <span
                   className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
@@ -354,6 +379,14 @@ export const SubjectsView: React.FC = () => {
                           ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                           : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
 
+                      const matchedMaterial = task.classroomId
+                        ? (activeSubject.materials || []).find((m) => m.classroomId === task.classroomId)
+                        : undefined;
+                      const taskAttachments =
+                        task.attachments && task.attachments.length > 0
+                          ? task.attachments
+                          : matchedMaterial?.attachments || [];
+
                       return (
                         <div
                           key={task.id}
@@ -375,6 +408,30 @@ export const SubjectsView: React.FC = () => {
                               {task.title}
                             </h5>
                             <p className="text-xs text-slate-400 mt-0.5">{task.description}</p>
+                            {taskAttachments.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {taskAttachments.map((att, idx) => {
+                                  const href = resolveAttachmentUrl(att);
+                                  if (!href) return null;
+                                  return (
+                                    <a
+                                      key={`${href}-${idx}`}
+                                      href={href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-[11px] text-cyan-200 hover:text-white transition-colors max-w-full"
+                                    >
+                                      <Paperclip className="w-3 h-3 text-cyan-400 shrink-0" />
+                                      <span className="text-[10px] font-bold uppercase text-cyan-400 shrink-0">
+                                        {ATTACHMENT_TYPE_LABELS[att.type]}
+                                      </span>
+                                      <span className="truncate max-w-[200px]">{att.title}</span>
+                                      <ExternalLink className="w-3 h-3 opacity-75 shrink-0" />
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
@@ -412,23 +469,46 @@ export const SubjectsView: React.FC = () => {
                     {activeSubject.evaluations.map((ev) => (
                       <div
                         key={ev.id}
-                        className="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] flex items-center justify-between gap-2 text-xs"
+                        className="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] flex flex-col gap-2 text-xs"
                       >
-                        <div className="min-w-0">
-                          <p className="font-bold text-white truncate">{ev.name}</p>
-                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                            Data: {ev.date} • Peso: {ev.weight}%
-                          </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-white truncate">{ev.name}</p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                              Data: {ev.date} • Peso: {ev.weight}%
+                            </p>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                              ev.status === 'completed'
+                                ? 'bg-emerald-500/15 text-emerald-300'
+                                : 'bg-amber-500/15 text-amber-300'
+                            }`}
+                          >
+                            {ev.status === 'completed' ? (ev.grade ? `Nota ${ev.grade}` : 'Entregue') : 'Pendente'}
+                          </span>
                         </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                            ev.status === 'completed'
-                              ? 'bg-emerald-500/15 text-emerald-300'
-                              : 'bg-amber-500/15 text-amber-300'
-                          }`}
-                        >
-                          {ev.status === 'completed' ? (ev.grade ? `Nota ${ev.grade}` : 'Entregue') : 'Pendente'}
-                        </span>
+                        {ev.attachments && ev.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/[0.05]">
+                            {ev.attachments.map((att, idx) => {
+                              const href = resolveAttachmentUrl(att);
+                              if (!href) return null;
+                              return (
+                                <a
+                                  key={`${href}-${idx}`}
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-[10px] text-cyan-200 hover:text-white transition-colors max-w-full"
+                                >
+                                  <Paperclip className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                  <span className="truncate max-w-[180px]">{att.title}</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-75 shrink-0" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -482,7 +562,7 @@ export const SubjectsView: React.FC = () => {
       </div>
       )}
 
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
           <div className="bento-card rounded-2xl w-full max-w-md p-7 shadow-2xl relative">
             <button
@@ -543,7 +623,8 @@ export const SubjectsView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Portals: the page wrapper's animation creates a stacking context that would put dialogs under the sticky header */}
@@ -704,12 +785,15 @@ export const SubjectsView: React.FC = () => {
         document.body
       )}
 
-      {selectedMaterial && (
+      {selectedMaterial && createPortal(
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in"
           onClick={() => setSelectedMaterial(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedMaterial.title}
             className="bento-card rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-white/[0.1]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -730,6 +814,7 @@ export const SubjectsView: React.FC = () => {
               </div>
               <button
                 type="button"
+                aria-label="Fechar modal"
                 onClick={() => setSelectedMaterial(null)}
                 className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white cursor-pointer shrink-0"
               >
@@ -751,31 +836,40 @@ export const SubjectsView: React.FC = () => {
                     <span>Arquivos & Links para Estudo ({selectedMaterial.attachments.length})</span>
                   </h4>
                   <div className="space-y-2">
-                    {selectedMaterial.attachments.map((att, idx) => (
-                      <a
-                        key={`${att.url}-${idx}`}
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-xs text-white transition-all group"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-bold text-cyan-100 group-hover:text-white truncate">{att.title}</p>
-                          <p className="text-[11px] text-cyan-300/75 truncate font-mono mt-0.5">{att.url}</p>
-                        </div>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold text-[11px] shrink-0">
-                          <span>Abrir</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </span>
-                      </a>
-                    ))}
+                    {selectedMaterial.attachments.map((att, idx) => {
+                      const href = resolveAttachmentUrl(att);
+                      if (!href) return null;
+                      return (
+                        <a
+                          key={`${href}-${idx}`}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-xs text-white transition-all group"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+                                {ATTACHMENT_TYPE_LABELS[att.type]}
+                              </span>
+                              <p className="font-bold text-cyan-100 group-hover:text-white truncate">{att.title}</p>
+                            </div>
+                            <p className="text-[11px] text-cyan-300/75 truncate font-mono mt-0.5">{href}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold text-[11px] shrink-0">
+                            <span>{ATTACHMENT_OPEN_LABELS[att.type]}</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </span>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               ) : selectedMaterial.url ? (
                 <a
                   href={selectedMaterial.url}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all"
                 >
                   <span>Abrir Material para Estudo</span>
@@ -787,7 +881,7 @@ export const SubjectsView: React.FC = () => {
                   <a
                     href="https://classroom.google.com"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 font-bold text-[11px] shrink-0 inline-flex items-center gap-1"
                   >
                     <span>Classroom</span>
@@ -797,7 +891,8 @@ export const SubjectsView: React.FC = () => {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

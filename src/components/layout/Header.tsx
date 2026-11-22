@@ -34,11 +34,22 @@ function formatShortTime(date = new Date()): string {
   return `${day} ${months[date.getMonth()]} • ${hours}:${minutes}`;
 }
 
+export function formatHeaderInstitutionLabel(
+  isAuthenticated: boolean,
+  institution?: string | null,
+  semester?: string | null
+): string {
+  const sem = semester || '2026.2';
+  if (!isAuthenticated) return 'Planner Acadêmico';
+  const cleanInstitution = institution?.trim();
+  return `${cleanInstitution || 'Planner Acadêmico'} • ${sem}`;
+}
+
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeTab, setActiveTab, studentName, setStudentName, tasks, subjects, setIsNewTaskModalOpen, setIsClassroomModalOpen } = usePlanner();
-  const { currentUser, logout, updateProfileName } = useAuth();
+  const { currentUser, isAuthenticated, logout, updateProfileName } = useAuth();
   const { isActive: isTimerActive, formattedTime } = useTimer();
   const { theme, toggleTheme } = useTheme();
 
@@ -156,7 +167,7 @@ export const Header: React.FC = () => {
     <header className="top-header-backdrop sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3 pb-2 bg-[#07070b]/85 backdrop-blur-md">
       <div className="top-dock-shell max-w-[1440px] mx-auto rounded-2xl bg-[#10111a]/85 backdrop-blur-2xl border border-white/[0.09] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] px-3 sm:px-5 h-16 flex items-center justify-between gap-2 xl:gap-4 transition-all">
         
-        {/* Left: Brand Identity + Impacta Pill */}
+        {/* Left: Brand Identity + Institution Pill */}
         <div className="flex items-center gap-3 shrink-0">
           <div 
             onClick={() => setActiveTab('dashboard')}
@@ -177,7 +188,7 @@ export const Header: React.FC = () => {
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 font-medium hidden 2xl:block truncate max-w-[150px]">
-                {currentUser?.institution || 'Minha Faculdade'} • {currentUser?.semester || '2026.2'}
+                {formatHeaderInstitutionLabel(isAuthenticated, currentUser?.institution, currentUser?.semester)}
               </p>
             </div>
           </div>

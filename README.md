@@ -35,6 +35,7 @@ Os enunciados das tarefas usam FlutterFlow, Figma e Xano. Conforme autorizado pe
 | Tabela `users` do Xano | `auth.users` (Supabase Auth) + `public.profiles` | `schema.sql` |
 | Filtro por usuário no endpoint | Policies RLS `<tabela>_select_own`, `_insert_own`, `_update_own`, `_delete_own` | `schema.sql`, `tables/` |
 | Lógica em Python no Xano | Scripts Python locais | `scripts/` |
+| Gemini Code Assist (extensão do VS Code) | Google Antigravity com modelo Gemini (agente de IA usado no desenvolvimento) | conversas do projeto no Antigravity |
 | Link de visualização do FlutterFlow | App publicado na Vercel | https://edutrack-ai-mauve-eight.vercel.app |
 
 **Campos da tabela de tarefas (Tarefa 11):** o enunciado pede `academic_tasks`; a tabela real é `public.tasks`.
