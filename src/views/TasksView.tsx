@@ -72,7 +72,7 @@ export const TasksView: React.FC = () => {
 
   // Google Classroom Sync Modal Trigger
   const [isSyncingClassroom] = useState(false);
-  const [syncStepMessage] = useState('Autenticando via Google Workspace da Impacta...');
+  const [syncStepMessage] = useState('Autenticando via Google Workspace...');
   const [syncSuccessBanner] = useState<string | null>(null);
 
   const handleSyncClassroom = () => {
@@ -191,7 +191,7 @@ export const TasksView: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{syncSuccessBanner}</span>
           </div>
-          <span className="text-[11px] font-mono text-emerald-400/90">Google Workspace • Impacta</span>
+          <span className="text-[11px] font-mono text-emerald-400/90">Google Workspace</span>
         </div>
       )}
 
@@ -581,7 +581,7 @@ export const TasksView: React.FC = () => {
                 {syncStepMessage}
               </h3>
               <p className="text-xs text-slate-400">
-                Conectado ao domínio institucional <span className="text-amber-400 font-mono">@impacta.edu.br</span>
+                Conectado à sua conta institucional via Google Workspace
               </p>
             </div>
 

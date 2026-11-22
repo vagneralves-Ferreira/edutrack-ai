@@ -9,7 +9,7 @@ async function createWindow() {
     height: 860,
     minWidth: 1024,
     minHeight: 700,
-    title: 'EduTrack AI | Planner Acadêmico - Faculdade Impacta',
+    title: 'EduTrack AI | Planner Acadêmico Inteligente',
     backgroundColor: '#07070b',
     autoHideMenuBar: true,
     webPreferences: {

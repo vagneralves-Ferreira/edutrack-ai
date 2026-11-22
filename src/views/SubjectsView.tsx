@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, X, User, Clock, CheckCircle2, BookMarked, FileText, GraduationCap, Calendar, ExternalLink, Paperclip, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { usePlanner } from '../context/PlannerContext';
+import { useAuth } from '../context/AuthContext';
 import { AiDica } from '../components/AiDica';
 import { EmptyPlannerState } from '../components/EmptyPlannerState';
 import { formatDateBR } from '../utils/helpers';
@@ -31,6 +32,7 @@ function resolveAttachmentUrl(att: MaterialAttachment): string {
 }
 
 export const SubjectsView: React.FC = () => {
+  const { currentUser } = useAuth();
   const {
     subjects,
     tasks,
@@ -171,7 +173,7 @@ export const SubjectsView: React.FC = () => {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Disciplinas & Ementas Acadêmicas</h1>
             <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
-              Conteúdo programático, tópicos ministrados e materiais de estudo da Faculdade Impacta
+              Conteúdo programático, tópicos ministrados e materiais de estudo
             </p>
           </div>
         </div>
@@ -271,7 +273,7 @@ export const SubjectsView: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">{activeSubject.code}</span>
-                  <span className="text-xs text-slate-400">Faculdade Impacta Tecnologia</span>
+                  <span className="text-xs text-slate-400">{currentUser?.institution || 'Planner Acadêmico'}</span>
                 </div>
                 <span
                   className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${

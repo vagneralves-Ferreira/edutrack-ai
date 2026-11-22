@@ -152,7 +152,7 @@ export const TimerView: React.FC = () => {
         {sessionCompleted && (
           <div className="mt-6 p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-center gap-2">
             <Check className="w-4 h-4 text-emerald-400" />
-            <span>Parabéns! Sessão computada com sucesso no gráfico de tempo da Impacta.</span>
+            <span>Parabéns! Sessão computada com sucesso no seu gráfico de tempo.</span>
           </div>
         )}
       </div>
